@@ -8,6 +8,7 @@ const ChartPageState = {
   showVolume: true,
   showMacd: true,
   measureStart: null,
+  resizeObserver: null,
 };
 
 const DRAWING_TOOLS = {
@@ -127,8 +128,7 @@ function getChartPageStyles() {
         { color: '#f43f5e', size: 1.5 },
       ],
       lastValueMark: {
-        show: true,
-        text: { color: '#0b1220', backgroundColor: '#e2e8f0' },
+        show: false,
       },
     },
     xAxis: {
@@ -548,11 +548,57 @@ async function renderChartPage() {
   }
 }
 
+async function openChartSymbol(symbol, name) {
+  const nextSymbol = (symbol || '').trim().toUpperCase();
+  if (!nextSymbol) return;
+  ChartPageState.symbol = nextSymbol;
+  ChartPageState.name = name || nextSymbol;
+  document.body.dataset.chartSymbol = nextSymbol;
+  document.body.dataset.chartName = ChartPageState.name;
+  const nextUrl = `/chart?symbol=${encodeURIComponent(nextSymbol)}&name=${encodeURIComponent(ChartPageState.name)}`;
+  window.history.replaceState({}, '', nextUrl);
+  await renderChartPage();
+  await loadChartNews(nextSymbol);
+}
+
 function resizeChartPage() {
   const resize = findChartMethod(ChartPageState.chart, 'resize');
   if (resize) {
     resize();
   }
+}
+
+function triggerChartResizeBurst() {
+  resizeChartPage();
+  window.setTimeout(resizeChartPage, 60);
+  window.setTimeout(resizeChartPage, 180);
+  window.setTimeout(resizeChartPage, 320);
+}
+
+function rebuildChartForLayoutChange() {
+  if (!ChartPageState.symbol || !ChartPageState.chartData.length) return;
+  try {
+    const chart = buildChartPage();
+    applyChartData(chart, ChartPageState.chartData);
+    scrollChartToRealtime(chart);
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function bindChartResizeObservers() {
+  const dom = getChartPageDom();
+  const resizeTarget = dom.root?.parentElement || dom.root;
+  if (!resizeTarget || typeof ResizeObserver === 'undefined') return;
+  if (ChartPageState.resizeObserver) {
+    try {
+      ChartPageState.resizeObserver.disconnect();
+    } catch (_) {}
+  }
+  ChartPageState.resizeObserver = new ResizeObserver(() => {
+    triggerChartResizeBurst();
+  });
+  ChartPageState.resizeObserver.observe(resizeTarget);
 }
 
 function initChartPage() {
@@ -561,7 +607,13 @@ function initChartPage() {
   bindChartPageToolbar();
   renderChartPage();
   loadChartNews(ChartPageState.symbol);
-  window.addEventListener('resize', resizeChartPage);
+  bindChartResizeObservers();
+  window.addEventListener('resize', triggerChartResizeBurst);
+  window.addEventListener('watchlist:toggle', () => {
+    triggerChartResizeBurst();
+    window.setTimeout(rebuildChartForLayoutChange, 260);
+  });
 }
 
+window.openChartSymbol = openChartSymbol;
 document.addEventListener('DOMContentLoaded', initChartPage);

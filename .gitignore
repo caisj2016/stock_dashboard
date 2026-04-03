@@ -4,3 +4,7 @@ portfolio.json
 .yf_cache/
 data_backups/
 *.pyc
+docs/*.pdf
+docs/screenshots/
+docs/__pycache__/
+用户指南_带截图版.pdf

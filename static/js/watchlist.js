@@ -13,6 +13,10 @@ function wlIsDashboardPage() {
   return window.location.pathname === '/';
 }
 
+function wlIsChartPage() {
+  return window.location.pathname === '/chart';
+}
+
 function wlShell() {
   return document.querySelector('.app-shell.has-shared-watchlist');
 }
@@ -186,6 +190,9 @@ function bindWatchlistRows(list) {
       document.querySelectorAll('#wlRows .wl-row').forEach(item => item.classList.remove('wl-active'));
       row.classList.add('wl-active');
       renderWatchlistDetail(q.symbol);
+      if (wlIsChartPage() && typeof window.openChartSymbol === 'function') {
+        window.openChartSymbol(q.symbol, q.name || q.symbol);
+      }
     });
     row.addEventListener('dblclick', () => {
       window.location.href = `/chart?symbol=${encodeURIComponent(q.symbol)}&name=${encodeURIComponent(q.name || q.symbol)}`;
@@ -288,7 +295,12 @@ function applyWatchlistCollapsed(collapsed) {
   try {
     localStorage.setItem('watchlistCollapsed', collapsed ? '1' : '0');
   } catch (_) {}
+  window.dispatchEvent(new CustomEvent('watchlist:toggle', { detail: { collapsed } }));
   window.dispatchEvent(new Event('resize'));
+  window.setTimeout(() => {
+    window.dispatchEvent(new Event('resize'));
+    window.dispatchEvent(new CustomEvent('watchlist:toggle', { detail: { collapsed } }));
+  }, 240);
 }
 
 function toggleWatchlistCollapsed() {
