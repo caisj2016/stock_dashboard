@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ name or symbol or '个股图表' }} - 个股图表</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body data-chart-symbol="{{ symbol or '' }}" data-chart-name="{{ name or '' }}">
+<div class="app-shell has-shared-watchlist chart-shell">
+  <div class="app chart-page-app">
+    <div class="header chart-header">
+      <div class="brand-wrap">
+        <div class="brand">
+          <div class="brand-title">个股图表</div>
+        </div>
+        <div class="nav-pills">
+          <a class="page-link" href="/">主页面</a>
+          <a class="page-link" href="/screener">技术选股</a>
+        </div>
+      </div>
+    </div>
+
+    <section class="chart-topbar">
+      <div class="chart-topbar-main">
+        <div class="chart-symbol" id="chartPageSymbol">{{ symbol or '未选择股票' }}</div>
+        <div class="chart-name" id="chartPageName">{{ name or '个股图表' }}</div>
+      </div>
+      <div class="chart-topbar-side">
+        <div class="chart-hero-price" id="chartHeroPrice">--</div>
+        <div class="chart-topbar-meta">
+          <div class="chart-hero-change neutral" id="chartHeroChange">--</div>
+          <div class="chart-hero-updated" id="chartHeroUpdated"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="chart-card chart-card-kline chart-card-kline-compact">
+      <div class="chart-control-bar">
+        <div class="chart-toolbar chart-toolbar-main">
+          <button class="screen-chip active" type="button" data-chart-page-interval="D">日线</button>
+          <button class="screen-chip" type="button" data-chart-page-interval="W">周线</button>
+          <button class="screen-chip" type="button" data-chart-page-interval="M">月线</button>
+          <button class="screen-chip" type="button" data-chart-page-interval="240">4小时</button>
+        </div>
+        <div class="chart-subpane-toggle chart-subpane-toggle-right">
+          <button class="screen-chip active" type="button" data-subpane-toggle="volume">成交量</button>
+          <button class="screen-chip active" type="button" data-subpane-toggle="macd">MACD</button>
+        </div>
+      </div>
+
+      <div class="chart-tool-hint" id="chartToolHint"></div>
+
+      <div class="chart-stage">
+        <aside class="chart-side-tools">
+          <button class="tool-icon-btn active" type="button" data-draw-tool="cursor" title="普通查看">◎</button>
+          <button class="tool-icon-btn" type="button" data-draw-tool="segment" title="趋势线">／</button>
+          <button class="tool-icon-btn" type="button" data-draw-tool="horizontal" title="水平线">H</button>
+          <button class="tool-icon-btn" type="button" data-draw-tool="fibonacci" title="斐波那契回撤">F</button>
+          <button class="tool-icon-btn" type="button" data-draw-tool="price_range" title="价格范围">价</button>
+          <button class="tool-icon-btn" type="button" data-draw-tool="time_range" title="日期范围">时</button>
+          <button class="tool-icon-btn tool-icon-btn-clear" type="button" id="chartClearDrawingsBtn" title="清空画线">清</button>
+        </aside>
+
+        <div class="klinechart-host-wrap">
+          <div id="klineChartContainer" class="klinechart-host"></div>
+          <div id="chartMeasureLayer" class="chart-measure-layer"></div>
+        </div>
+      </div>
+
+      <div class="chart-fallback" id="chartFallback" style="display:none">
+        图表数据获取失败，请稍后重试。
+      </div>
+    </section>
+
+    <section class="chart-news-card">
+      <div class="chart-news-head">
+        <div class="ai-card-title">
+          <span class="ai-icon">📰</span>
+          <span>个股最新资讯</span>
+        </div>
+        <div class="chart-news-actions">
+          <span class="ai-last-fetch" id="chartNewsFetch"></span>
+          <button class="btn-refresh" type="button" id="chartNewsRefreshBtn">刷新资讯</button>
+        </div>
+      </div>
+      <div class="chart-news-body" id="chartNewsBody">
+        <div class="empty-note">正在获取个股最新资讯...</div>
+      </div>
+    </section>
+  </div>
+
+  {% include "partials/watchlist.html" %}
+</div>
+
+<script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+<script src="https://cdn.jsdelivr.net/npm/klinecharts@9.8.12/dist/umd/klinecharts.min.js"></script>
+<script src="{{ url_for('static', filename='js/watchlist.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chart_page.js') }}"></script>
+</body>
+</html>

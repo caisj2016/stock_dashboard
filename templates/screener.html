@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>技术选股 · 日本股票观察</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+<div class="app-shell has-shared-watchlist screener-shell">
+  <div class="app">
+    <div class="header screener-header">
+      <div>
+        <div class="logo">技术选股 <span>Signal</span> · Screener</div>
+        {% include "partials/nav_links.html" %}
+      </div>
+      <div class="header-actions">
+        <div class="status-pill">
+          <div class="dot closed"></div>
+          <span id="screenerStatusPill">股票池：核心样本</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="screener-toolbar-card">
+      <div class="screener-toolbar-row">
+        <div class="screener-toolbar-label">股票池</div>
+        <div class="screener-mini-chip-row">
+          <button class="screen-chip screen-chip-mini active" type="button" data-universe="core45">核心45</button>
+          <button class="screen-chip screen-chip-mini" type="button" data-universe="nikkei225">Nikkei 225</button>
+          <button class="screen-chip screen-chip-mini" type="button" data-universe="topixcore">TOPIX Core 30</button>
+        </div>
+      </div>
+
+      <div class="screener-toolbar-row">
+        <div class="screener-toolbar-label">策略</div>
+        <div class="screener-mini-chip-row">
+          <button class="screen-chip screen-chip-mini active" type="button" data-mode="oversold">超卖反弹</button>
+          <button class="screen-chip screen-chip-mini" type="button" data-mode="macd_cross">MACD 金叉</button>
+          <button class="screen-chip screen-chip-mini" type="button" data-mode="volume_breakout">放量上涨</button>
+          <button class="screen-chip screen-chip-mini" type="button" data-mode="ma_breakout">均线突破</button>
+          <button class="screen-chip screen-chip-mini" type="button" data-mode="combo">综合信号</button>
+        </div>
+
+        <div class="screener-toolbar-actions">
+          <span class="ai-last-fetch" id="screenerLastFetch"></span>
+          <button class="ai-btn" id="screenerRefreshBtn" type="button">刷新结果</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="ai-card screener-results-panel">
+      <div class="ai-card-header">
+        <div class="ai-card-title">
+          <span class="ai-icon">•••</span>
+          <span>选股结果</span>
+        </div>
+      </div>
+      <div class="ai-body" id="screenerResultsBody">
+        <div class="ai-loading"><div class="ai-spinner"></div>正在计算技术信号并整理结果...</div>
+      </div>
+    </div>
+  </div>
+
+  {% include "partials/watchlist.html" %}
+</div>
+
+<script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+<script src="{{ url_for('static', filename='js/watchlist.js') }}"></script>
+<script src="{{ url_for('static', filename='js/screener.js') }}"></script>
+</body>
+</html>

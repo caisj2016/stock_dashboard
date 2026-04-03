@@ -1,0 +1,18 @@
+<div class="modal-bg" id="modal" style="display:none" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h3 id="modalTitle">编辑持仓</h3>
+    <label>状态</label>
+    <select id="mStatus">
+      <option value="watch">观察中</option>
+      <option value="holding">已持有</option>
+    </select>
+    <label>持股数量</label>
+    <input type="number" id="mShares" placeholder="0" min="0" step="1" />
+    <label>成本价 / 每股</label>
+    <input type="number" id="mCost" placeholder="0.00" min="0" step="1" />
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">取消</button>
+      <button class="btn-save" onclick="saveHolding()">保存</button>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>日本股票观察仪表盘</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+<div class="app-shell has-shared-watchlist">
+  <div class="app">
+    {% include "partials/header.html" %}
+    {% include "partials/summary.html" %}
+    <div class="grid" id="grid"></div>
+    {% include "partials/news_panels.html" %}
+    {% include "partials/digest_panels.html" %}
+    <div class="footer">
+      数据来源：Yahoo Finance。行情默认每 15 分钟自动刷新一次，也可以手动立即刷新。
+    </div>
+  </div>
+
+  {% include "partials/watchlist.html" %}
+</div>
+
+{% include "partials/modal.html" %}
+{% include "partials/chart_modal.html" %}
+
+<script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+<script src="{{ url_for('static', filename='js/chart.js') }}"></script>
+<script src="{{ url_for('static', filename='js/watchlist.js') }}"></script>
+<script src="{{ url_for('static', filename='js/news.js') }}"></script>
+<script src="{{ url_for('static', filename='js/digest.js') }}"></script>
+<script src="{{ url_for('static', filename='js/portfolio.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+</body>
+</html>

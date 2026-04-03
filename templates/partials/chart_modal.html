@@ -1,0 +1,45 @@
+<div class="modal-bg chart-modal-bg" id="chartModal" style="display:none" onclick="if(event.target===this)closeChartModal()">
+  <div class="chart-modal">
+    <div class="chart-modal-header">
+      <div>
+        <div class="chart-symbol" id="chartModalSymbol">--</div>
+        <div class="chart-modal-name" id="chartModalName">股票图表</div>
+      </div>
+      <div class="chart-modal-actions">
+        <div class="chart-toolbar chart-toolbar-inline">
+          <button class="screen-chip active" type="button" data-chart-interval="D">日线</button>
+          <button class="screen-chip" type="button" data-chart-interval="W">周线</button>
+          <button class="screen-chip" type="button" data-chart-interval="M">月线</button>
+          <button class="screen-chip" type="button" data-chart-interval="240">4小时</button>
+        </div>
+        <a class="page-link" id="chartModalOpenPage" href="/chart">打开独立页面</a>
+        <button class="btn-cancel" onclick="closeChartModal()">关闭</button>
+      </div>
+    </div>
+
+    <div class="chart-modal-meta" id="chartModalMeta">
+      <div class="chart-modal-stat">
+        <span class="chart-modal-label">MACD</span>
+        <span class="chart-modal-value" id="chartModalMacd">--</span>
+      </div>
+      <div class="chart-modal-stat">
+        <span class="chart-modal-label">RSI</span>
+        <span class="chart-modal-value" id="chartModalRsi">--</span>
+      </div>
+      <div class="chart-modal-stat">
+        <span class="chart-modal-label">成交量</span>
+        <span class="chart-modal-value" id="chartModalVolume">--</span>
+      </div>
+    </div>
+
+    <div class="chart-widget-wrap chart-widget-wrap-modal">
+      <div id="tvChartModalContainer" class="chart-widget"></div>
+    </div>
+    <div class="chart-fallback" id="chartModalFallback" style="display:none">
+      图表组件加载失败，请检查网络连接后再试。
+    </div>
+    <div class="chart-modal-attribution">
+      Charts by TradingView Lightweight Charts™ · <a href="https://www.tradingview.com" target="_blank" rel="noopener">TradingView</a>
+    </div>
+  </div>
+</div>

@@ -1,0 +1,37 @@
+<div class="ai-panels digest-panels">
+
+  <div class="ai-card" id="nikkeiDigestPanel">
+    <div class="ai-card-header">
+      <div class="ai-card-title">
+        <span class="ai-icon">要</span>
+        <span>日经市场脉搏</span>
+        <span class="ai-badge">Digest</span>
+      </div>
+      <div class="ai-card-actions">
+        <span class="ai-last-fetch" id="nikkeiDigestFetch"></span>
+        <button class="ai-btn" id="nikkeiDigestBtn" onclick="loadTopicDigest('nikkei', { force: true })">刷新</button>
+      </div>
+    </div>
+    <div class="ai-body" id="nikkeiDigestBody">
+      <div class="ai-placeholder">滚动到这里时再加载日经摘要。</div>
+    </div>
+  </div>
+
+  <div class="ai-card" id="semiDigestPanel">
+    <div class="ai-card-header">
+      <div class="ai-card-title">
+        <span class="ai-icon">芯</span>
+        <span>半导体脉搏</span>
+        <span class="ai-badge">Digest</span>
+      </div>
+      <div class="ai-card-actions">
+        <span class="ai-last-fetch" id="semiDigestFetch"></span>
+        <button class="ai-btn" id="semiDigestBtn" onclick="loadTopicDigest('semiconductor', { force: true })">刷新</button>
+      </div>
+    </div>
+    <div class="ai-body" id="semiDigestBody">
+      <div class="ai-placeholder">滚动到这里时再加载半导体摘要。</div>
+    </div>
+  </div>
+
+</div>
