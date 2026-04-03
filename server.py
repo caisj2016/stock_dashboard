@@ -8,6 +8,7 @@
 import json
 import os
 import re
+import shutil
 import threading
 import time
 import xml.etree.ElementTree as ET
@@ -64,8 +65,10 @@ app.config["TEMPLATES_AUTO_RELOAD"] = env_bool("TEMPLATES_AUTO_RELOAD", True)
 app.config["SEND_FILE_MAX_AGE_DEFAULT"] = env_int("SEND_FILE_MAX_AGE_DEFAULT", 0)
 
 DATA_FILE = os.path.join(BASE_DIR, "portfolio.json")
+DATA_BACKUP_DIR = os.path.join(BASE_DIR, "data_backups")
 YF_CACHE_DIR = os.path.join(BASE_DIR, ".yf_cache")
 os.makedirs(YF_CACHE_DIR, exist_ok=True)
+os.makedirs(DATA_BACKUP_DIR, exist_ok=True)
 if hasattr(yf, "set_tz_cache_location"):
     yf.set_tz_cache_location(YF_CACHE_DIR)
 
@@ -90,6 +93,7 @@ _cache_lock = threading.Lock()
 CACHE_TTL = env_int("QUOTE_CACHE_TTL", 60)
 QUOTE_FETCH_WORKERS = env_int("QUOTE_FETCH_WORKERS", 6)
 SCREENER_FETCH_WORKERS = env_int("SCREENER_FETCH_WORKERS", 8)
+PORTFOLIO_BACKUP_LIMIT = max(3, env_int("PORTFOLIO_BACKUP_LIMIT", 20))
 QUOTE_EXECUTOR = ThreadPoolExecutor(max_workers=max(2, QUOTE_FETCH_WORKERS))
 SCREENER_EXECUTOR = ThreadPoolExecutor(max_workers=max(2, SCREENER_FETCH_WORKERS))
 
@@ -159,20 +163,93 @@ def translate_to_zh(text: str) -> str:
 #  Portfolio helpers
 # ────────────────────────────────────────
 
+def _normalize_portfolio_items(data):
+    normalized = []
+    for item in data or []:
+        code = str(item.get("code", "")).upper().strip()
+        if not code:
+            continue
+        if not code.endswith(".T"):
+            code += ".T"
+        shares = int(float(item.get("shares", 0) or 0))
+        cost = float(item.get("cost", 0) or 0)
+        status = item.get("status") or ("holding" if shares > 0 else "watch")
+        if status not in {"holding", "watch"}:
+            status = "holding" if shares > 0 else "watch"
+        normalized.append({
+            "code": code,
+            "name": resolve_stock_name(code, item.get("name")),
+            "shares": shares if status == "holding" else 0,
+            "cost": cost if status == "holding" else 0,
+            "status": status,
+        })
+    return normalized or list(DEFAULT_PORTFOLIO)
+
+
+def _backup_existing_portfolio():
+    if not os.path.exists(DATA_FILE):
+        return
+    stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    backup_file = os.path.join(DATA_BACKUP_DIR, f"portfolio_{stamp}.json")
+    shutil.copy2(DATA_FILE, backup_file)
+
+
+def _prune_portfolio_backups():
+    backups = []
+    for name in os.listdir(DATA_BACKUP_DIR):
+        if name.startswith("portfolio_") and name.endswith(".json"):
+            full_path = os.path.join(DATA_BACKUP_DIR, name)
+            if os.path.isfile(full_path):
+                backups.append(full_path)
+    backups.sort(key=os.path.getmtime, reverse=True)
+    for old_file in backups[PORTFOLIO_BACKUP_LIMIT:]:
+        try:
+            os.remove(old_file)
+        except OSError:
+            pass
+
+
+def _load_latest_portfolio_backup():
+    backups = []
+    for name in os.listdir(DATA_BACKUP_DIR):
+        if name.startswith("portfolio_") and name.endswith(".json"):
+            full_path = os.path.join(DATA_BACKUP_DIR, name)
+            if os.path.isfile(full_path):
+                backups.append(full_path)
+    backups.sort(key=os.path.getmtime, reverse=True)
+    for backup_file in backups:
+        try:
+            with open(backup_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                return data
+        except Exception:
+            continue
+    return None
+
+
 def load_portfolio():
     if os.path.exists(DATA_FILE):
-        with open(DATA_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
-            for item in data:
-                item.setdefault("status", "holding" if item.get("shares", 0) > 0 else "watch")
-                item["name"] = resolve_stock_name(item.get("code", ""), item.get("name"))
-            return data
+        try:
+            with open(DATA_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception:
+            data = _load_latest_portfolio_backup()
+        if isinstance(data, list):
+            return _normalize_portfolio_items(data)
     return DEFAULT_PORTFOLIO
 
 
 def save_portfolio(data):
-    with open(DATA_FILE, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+    normalized = _normalize_portfolio_items(data)
+    _backup_existing_portfolio()
+    temp_file = DATA_FILE + ".tmp"
+    with open(temp_file, "w", encoding="utf-8") as f:
+        json.dump(normalized, f, ensure_ascii=False, indent=2)
+        f.flush()
+        os.fsync(f.fileno())
+    os.replace(temp_file, DATA_FILE)
+    _prune_portfolio_backups()
 
 
 def _is_symbol_like_name(name, code):
