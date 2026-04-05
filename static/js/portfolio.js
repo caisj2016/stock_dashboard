@@ -48,8 +48,20 @@ function renderCard(q, idx) {
   </div>`;
 }
 
+function getHoldingQuotes(qs) {
+  return (qs || []).filter(q => (q.status || (q.shares > 0 ? 'holding' : 'watch')) === 'holding');
+}
+
+function renderMainGrid(qs) {
+  const holdings = getHoldingQuotes(qs);
+  if (!holdings.length) {
+    return `<div class="ai-placeholder" style="grid-column:1 / -1; padding:32px 20px; text-align:center;">主界面仅显示已持有股票，当前暂无持仓。</div>`;
+  }
+  return holdings.map((q, i) => renderCard(q, i)).join('');
+}
+
 function updateSummary(qs) {
-  const holdings = qs.filter(q => (q.status || (q.shares > 0 ? 'holding' : 'watch')) === 'holding');
+  const holdings = getHoldingQuotes(qs);
   let totalMV = 0;
   let totalCost = 0;
   let totalPnl = 0;
@@ -121,7 +133,7 @@ async function refresh() {
   try {
     const snapshot = await fetchJson('/api/dashboard_snapshot');
     AppState.quotes = Array.isArray(snapshot?.quotes) ? snapshot.quotes : [];
-    document.getElementById('grid').innerHTML = AppState.quotes.map((q, i) => renderCard(q, i)).join('');
+    document.getElementById('grid').innerHTML = renderMainGrid(AppState.quotes);
     updateSummary(AppState.quotes);
     updateStatus(AppState.quotes);
     renderWatchlist(AppState.quotes);

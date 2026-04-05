@@ -16,6 +16,10 @@ const ScreenerUniverseMeta = {
   },
 };
 
+ScreenerUniverseMeta.nikkei225 = {
+  label: 'Nikkei 225',
+};
+
 function priceScale(values, height, topPad = 4, bottomPad = 4) {
   const vals = (values || []).filter(v => v != null);
   if (!vals.length) return () => height / 2;
