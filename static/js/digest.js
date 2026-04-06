@@ -8,7 +8,7 @@ const DigestState = window.DigestState;
 async function loadTopicDigest(topic, options = {}) {
   const map = {
     nikkei: { btn: 'nikkeiDigestBtn', body: 'nikkeiDigestBody', fetch: 'nikkeiDigestFetch', label: '日经市场' },
-    semiconductor: { btn: 'semiDigestBtn', body: 'semiDigestBody', fetch: 'semiDigestFetch', label: '半导体科技' }
+    semiconductor: { btn: 'semiDigestBtn', body: 'semiDigestBody', fetch: 'semiDigestFetch', label: '半导体+科技' }
   };
   const cfg = map[topic];
   if (!cfg) return;

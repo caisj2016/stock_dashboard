@@ -1,63 +1,175 @@
-function renderCard(q, idx) {
+const DASHBOARD_GRID_PHASE_DELAY = 32;
+const DASHBOARD_SPARK_DELAY = 140;
+
+AppState.gridHydrated = false;
+AppState.gridSignature = '';
+AppState.gridRenderTimer = null;
+AppState.sparkRenderTimer = null;
+AppState.gridRenderToken = 0;
+
+function getHoldingQuotes(qs) {
+  return (qs || []).filter(q => (q.status || (q.shares > 0 ? 'holding' : 'watch')) === 'holding');
+}
+
+function cardId(symbol) {
+  return `c-${String(symbol || '').replace('.', '_')}`;
+}
+
+function getCardTone(q) {
   const up = q.change > 0;
   const down = q.change < 0;
-  const cls = up ? 'up-card' : (down ? 'down-card' : '');
-  const chgCls = up ? 'up' : (down ? 'down' : 'neutral');
+  return {
+    up,
+    down,
+    cardClass: up ? 'up-card' : (down ? 'down-card' : ''),
+    changeClass: up ? 'up' : (down ? 'down' : 'neutral'),
+  };
+}
+
+function getHoldingMeta(q) {
+  const tone = getCardTone(q);
   const status = q.status || (q.shares > 0 ? 'holding' : 'watch');
   const statusLabel = status === 'holding' ? '\u5df2\u6301\u6709' : '\u89c2\u5bdf\u4e2d';
-  const price = q.price != null ? '\u00a5' + q.price.toLocaleString('ja-JP') : '--';
-  const chg = q.change != null ? (up ? '+' : '') + Math.round(q.change).toLocaleString() : '--';
-  const pct = q.pct != null ? (up ? '+' : '') + q.pct.toFixed(2) + '%' : '--';
+  const pnlSign = q.pnl > 0 ? '+' : '';
+  const pnlPct = q.pnl_pct != null ? `${pnlSign}${q.pnl_pct.toFixed(2)}%` : '--';
+  return {
+    status,
+    statusLabel,
+    tone,
+    price: q.price != null ? '\u00a5' + q.price.toLocaleString('ja-JP') : '--',
+    change: q.change != null ? (tone.up ? '+' : '') + Math.round(q.change).toLocaleString() : '--',
+    pct: q.pct != null ? (tone.up ? '+' : '') + q.pct.toFixed(2) + '%' : '--',
+    shares: `${(q.shares || 0).toLocaleString()} \u80a1`,
+    cost: `\u00a5${Number(q.cost || 0).toLocaleString('ja-JP')}`,
+    marketValue: `\u00a5${fmtK(q.market_value)}`,
+    pnl: `${pnlSign}\u00a5${fmtK(q.pnl)} (${pnlPct})`,
+    pnlClass: q.pnl > 0 ? 'up' : (q.pnl < 0 ? 'down' : ''),
+  };
+}
+
+function renderSparkMarkup(q) {
+  const tone = getCardTone(q);
   const spark = (q.closes && q.closes.length > 1) ? sparkPath(q.closes) : '';
-  const sparkColor = up ? '#22c55e' : (down ? '#ef4444' : '#6b7280');
+  const sparkColor = tone.up ? '#22c55e' : (tone.down ? '#ef4444' : '#6b7280');
+  if (!spark) return '<div class="spark spark-empty"></div>';
+  return `<svg class="spark" viewBox="0 0 170 30" preserveAspectRatio="none">
+    <path d="${spark}" fill="none" stroke="${sparkColor}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
+  </svg>`;
+}
+
+function renderCard(q, idx, options = {}) {
+  const { deferSpark = true } = options;
+  const meta = getHoldingMeta(q);
   const delay = idx * 0.04;
 
-  let holdingHtml = '';
-  if (status === 'holding' && q.shares && q.shares > 0) {
-    const pnlCls = q.pnl > 0 ? 'up' : (q.pnl < 0 ? 'down' : '');
-    const pnlSign = q.pnl > 0 ? '+' : '';
-    holdingHtml = `
-    <div class="holdings">
-      <div class="holding-row"><span class="holding-key">\u6301\u80a1\u6570</span><span class="holding-val">${q.shares.toLocaleString()} \u80a1</span></div>
-      <div class="holding-row"><span class="holding-key">\u6210\u672c\u4ef7</span><span class="holding-val">\u00a5${q.cost.toLocaleString()}</span></div>
-      <div class="holding-row"><span class="holding-key">\u5e02\u573a\u4ef7\u503c</span><span class="holding-val">\u00a5${fmtK(q.market_value)}</span></div>
-      <div class="holding-row"><span class="holding-key">\u76c8\u4e8f</span><span class="holding-val ${pnlCls}">${pnlSign}\u00a5${fmtK(q.pnl)} (${pnlSign}${q.pnl_pct?.toFixed(2)}%)</span></div>
-    </div>`;
-  } else {
-    holdingHtml = `<div class="no-holding">\u5f53\u524d\u6807\u8bb0\u4e3a\u89c2\u5bdf\u4e2d</div>`;
-  }
-
   return `
-  <div class="card ${cls}" style="animation-delay:${delay}s" id="c-${q.symbol.replace('.', '_')}">
+  <div class="card ${meta.tone.cardClass}" style="animation-delay:${delay}s" id="${cardId(q.symbol)}" data-symbol="${q.symbol}">
     <button class="card-remove" title="\u5220\u9664" onclick="removeStock('${q.symbol}')">\u00d7</button>
-    <div class="card-ticker">${q.symbol}</div>
-    <div class="card-name">${q.name || q.symbol}</div>
-    <div class="card-status ${status}">${statusLabel}</div>
-    <div class="card-price">${price}</div>
+    <div class="card-ticker" data-field="ticker">${q.symbol}</div>
+    <div class="card-name" data-field="name">${q.name || q.symbol}</div>
+    <div class="card-status ${meta.status}" data-field="status">${meta.statusLabel}</div>
+    <div class="card-price" data-field="price">${meta.price}</div>
     <div class="card-change">
-      <span class="chg ${chgCls}">${chg}</span>
-      <span class="chg ${chgCls}">${pct}</span>
+      <span class="chg ${meta.tone.changeClass}" data-field="change">${meta.change}</span>
+      <span class="chg ${meta.tone.changeClass}" data-field="pct">${meta.pct}</span>
     </div>
-    ${spark ? `<svg class="spark" viewBox="0 0 170 30" preserveAspectRatio="none">
-      <path d="${spark}" fill="none" stroke="${sparkColor}" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.8"/>
-    </svg>` : '<div style="height:32px"></div>'}
-    ${holdingHtml}
+    <div class="spark-slot" data-field="spark">${deferSpark ? '' : renderSparkMarkup(q)}</div>
+    <div class="holdings">
+      <div class="holding-row"><span class="holding-key">\u6301\u80a1\u6570</span><span class="holding-val" data-field="shares">${meta.shares}</span></div>
+      <div class="holding-row"><span class="holding-key">\u6210\u672c\u4ef7</span><span class="holding-val" data-field="cost">${meta.cost}</span></div>
+      <div class="holding-row"><span class="holding-key">\u5e02\u573a\u4ef7\u503c</span><span class="holding-val" data-field="market-value">${meta.marketValue}</span></div>
+      <div class="holding-row"><span class="holding-key">\u76c8\u4e8f</span><span class="holding-val ${meta.pnlClass}" data-field="pnl">${meta.pnl}</span></div>
+    </div>
     <button class="chart-link-btn" onclick="openChartModal('${q.symbol}', '${(q.name || q.symbol).replace(/'/g, "\\'")}')">\u5feb\u901f\u770b\u56fe</button>
     <a class="chart-link-btn" href="/chart?symbol=${encodeURIComponent(q.symbol)}&name=${encodeURIComponent(q.name || q.symbol)}">\u6253\u5f00\u4e13\u4e1a K \u7ebf</a>
     <button class="edit-btn" onclick="openModal('${q.symbol}', '${(q.name || '').replace(/'/g, "\\'")}')">\u270e \u7f16\u8f91\u72b6\u6001 / \u6301\u4ed3</button>
   </div>`;
 }
 
-function getHoldingQuotes(qs) {
-  return (qs || []).filter(q => (q.status || (q.shares > 0 ? 'holding' : 'watch')) === 'holding');
+function getHoldingsSignature(holdings) {
+  return (holdings || []).map(item => item.symbol).join('|');
 }
 
-function renderMainGrid(qs) {
+function updateCardNode(card, q) {
+  const meta = getHoldingMeta(q);
+  card.dataset.symbol = q.symbol;
+  card.classList.toggle('up-card', meta.tone.cardClass === 'up-card');
+  card.classList.toggle('down-card', meta.tone.cardClass === 'down-card');
+  card.querySelector('[data-field="ticker"]').textContent = q.symbol;
+  card.querySelector('[data-field="name"]').textContent = q.name || q.symbol;
+
+  const statusEl = card.querySelector('[data-field="status"]');
+  statusEl.textContent = meta.statusLabel;
+  statusEl.className = `card-status ${meta.status}`;
+
+  card.querySelector('[data-field="price"]').textContent = meta.price;
+
+  const changeEl = card.querySelector('[data-field="change"]');
+  const pctEl = card.querySelector('[data-field="pct"]');
+  changeEl.textContent = meta.change;
+  pctEl.textContent = meta.pct;
+  changeEl.className = `chg ${meta.tone.changeClass}`;
+  pctEl.className = `chg ${meta.tone.changeClass}`;
+
+  card.querySelector('[data-field="shares"]').textContent = meta.shares;
+  card.querySelector('[data-field="cost"]').textContent = meta.cost;
+  card.querySelector('[data-field="market-value"]').textContent = meta.marketValue;
+
+  const pnlEl = card.querySelector('[data-field="pnl"]');
+  pnlEl.textContent = meta.pnl;
+  pnlEl.className = `holding-val ${meta.pnlClass}`.trim();
+}
+
+function renderMainGrid(qs, options = {}) {
   const holdings = getHoldingQuotes(qs);
   if (!holdings.length) {
-    return `<div class="ai-placeholder" style="grid-column:1 / -1; padding:32px 20px; text-align:center;">主界面仅显示已持有股票，当前暂无持仓。</div>`;
+    return `<div class="ai-placeholder" style="grid-column:1 / -1; padding:32px 20px; text-align:center;">暂无持仓，先把股票标记为已持有吧。</div>`;
   }
-  return holdings.map((q, i) => renderCard(q, i)).join('');
+  return holdings.map((q, i) => renderCard(q, i, options)).join('');
+}
+
+function scheduleSparklineHydration(holdings) {
+  clearTimeout(AppState.sparkRenderTimer);
+  AppState.sparkRenderTimer = setTimeout(() => {
+    holdings.forEach(q => {
+      const slot = document.querySelector(`#${cardId(q.symbol)} [data-field="spark"]`);
+      if (slot) slot.innerHTML = renderSparkMarkup(q);
+    });
+  }, DASHBOARD_SPARK_DELAY);
+}
+
+function renderOrUpdateMainGrid(qs, options = {}) {
+  const { forceRebuild = false } = options;
+  const grid = document.getElementById('grid');
+  if (!grid) return;
+
+  const holdings = getHoldingQuotes(qs);
+  const signature = getHoldingsSignature(holdings);
+  const existingCards = Array.from(grid.querySelectorAll('.card[data-symbol]'));
+  const canPatch = !forceRebuild && AppState.gridHydrated && signature === AppState.gridSignature && existingCards.length === holdings.length;
+
+  if (canPatch) {
+    holdings.forEach(q => {
+      const card = document.getElementById(cardId(q.symbol));
+      if (card) updateCardNode(card, q);
+    });
+  } else {
+    grid.innerHTML = renderMainGrid(qs, { deferSpark: true });
+    AppState.gridHydrated = true;
+  }
+
+  AppState.gridSignature = signature;
+  scheduleSparklineHydration(holdings);
+}
+
+function queueMainGridRender(qs, options = {}) {
+  const { forceRebuild = false } = options;
+  clearTimeout(AppState.gridRenderTimer);
+  const token = ++AppState.gridRenderToken;
+  AppState.gridRenderTimer = setTimeout(() => {
+    if (token !== AppState.gridRenderToken) return;
+    renderOrUpdateMainGrid(qs, { forceRebuild });
+  }, DASHBOARD_GRID_PHASE_DELAY);
 }
 
 function updateSummary(qs) {
@@ -105,10 +217,10 @@ function updateStatus(qs) {
   const hasLive = qs.some(q => q.market_state === 'REGULAR');
   if (hasLive) {
     dot.classList.add('live');
-    txt.textContent = '交易时段中 · 更新于 ' + new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+    txt.textContent = '\u4ea4\u6613\u4e2d ' + new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
   } else {
     dot.classList.add('closed');
-    txt.textContent = '当前为收盘时段 · 可查看最近一次行情';
+    txt.textContent = '\u6536\u76d8\u4e2d';
   }
 }
 
@@ -127,30 +239,36 @@ function applyIndexSnapshot(data) {
   });
 }
 
-async function refresh() {
+function applyFastSnapshot(snapshot) {
+  AppState.quotes = Array.isArray(snapshot?.quotes) ? snapshot.quotes : [];
+  updateSummary(AppState.quotes);
+  updateStatus(AppState.quotes);
+  renderWatchlist(AppState.quotes);
+  populateStockSelect(AppState.quotes);
+  applyIndexSnapshot(snapshot?.indexes || {});
+}
+
+async function refresh(options = {}) {
+  const { forceRebuild = false } = options;
   clearInterval(AppState.cdTimer);
   AppState.countdown = 60;
   try {
     const snapshot = await fetchJson('/api/dashboard_snapshot');
-    AppState.quotes = Array.isArray(snapshot?.quotes) ? snapshot.quotes : [];
-    document.getElementById('grid').innerHTML = renderMainGrid(AppState.quotes);
-    updateSummary(AppState.quotes);
-    updateStatus(AppState.quotes);
-    renderWatchlist(AppState.quotes);
-    populateStockSelect(AppState.quotes);
-    applyIndexSnapshot(snapshot?.indexes || {});
+    applyFastSnapshot(snapshot);
+    queueMainGridRender(AppState.quotes, { forceRebuild: forceRebuild || !AppState.gridHydrated });
   } catch (e) {
     console.error(e);
-    document.getElementById('statusText').textContent = '获取行情失败，请检查网络后重试';
+    document.getElementById('statusText').textContent = '\u884c\u60c5\u5f02\u5e38';
   }
   startCountdown();
 }
 
 function startCountdown() {
   AppState.countdown = 60;
+  document.getElementById('cdText').textContent = AppState.countdown + 's';
   AppState.cdTimer = setInterval(() => {
     AppState.countdown--;
-    document.getElementById('cdText').textContent = AppState.countdown + ' 秒后刷新';
+    document.getElementById('cdText').textContent = AppState.countdown + 's';
     if (AppState.countdown <= 0) refresh();
   }, 1000);
 }
@@ -189,7 +307,7 @@ async function saveHolding() {
     body: JSON.stringify(port),
   });
   closeModal();
-  refresh();
+  refresh({ forceRebuild: true });
 }
 
 async function addStock() {
@@ -206,7 +324,7 @@ async function addStock() {
   const data = await res.json();
   if (data.ok) {
     inp.value = '';
-    refresh();
+    refresh({ forceRebuild: true });
   } else {
     err.style.display = 'inline';
   }
@@ -219,7 +337,7 @@ async function removeStock(code) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ code }),
   });
-  refresh();
+  refresh({ forceRebuild: true });
 }
 
 async function fetchIndexes() {
@@ -284,7 +402,7 @@ function renderChartModalWidget() {
   );
 }
 
-function fillChartModalMeta(quote) {
+function fillChartModalMeta() {
   document.getElementById('chartModalMacd').textContent = '--';
   document.getElementById('chartModalRsi').textContent = '--';
   document.getElementById('chartModalVolume').textContent = '--';

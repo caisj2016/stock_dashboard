@@ -161,8 +161,8 @@ function renderScreenerCard(item) {
   const ma20Path = linePath(ma20Series, 220, 76);
   const isAdding = ScreenerPage.adding.has(item.symbol);
   const isSaved = !!item.in_watchlist;
-  const disabled = isAdding || isSaved ? 'disabled' : '';
-  const btnLabel = isSaved ? '已加入观察股' : (isAdding ? '加入中...' : '加入观察股');
+  const disabled = isAdding ? 'disabled' : '';
+  const btnLabel = getScreenerWatchButtonLabel(isSaved, isAdding);
   const chartUrl = `/chart?symbol=${encodeURIComponent(item.symbol)}&name=${encodeURIComponent(item.name || item.symbol)}`;
 
   return `
@@ -215,9 +215,15 @@ function renderScreenerCard(item) {
 
       <div class="screener-actions">
         <span class="screener-card-tip">点击卡片可直接打开大图</span>
-        <button class="ai-btn ${isSaved ? 'is-saved' : ''}" ${disabled} onclick="event.stopPropagation(); addScreenerStock('${item.symbol}', '${(item.name || '').replace(/'/g, "\\'")}')">${btnLabel}</button>
+        <button
+          class="ai-btn ${isSaved ? 'is-saved' : ''}"
+          data-watch-symbol="${item.symbol}"
+          data-watch-name="${(item.name || '').replace(/"/g, '&quot;')}"
+          data-watch-saved="${isSaved ? 'true' : 'false'}"
+          ${disabled}
+          onclick="event.stopPropagation(); handleScreenerWatchClick(this)"
+        >${btnLabel}</button>
         <a class="page-link" href="${chartUrl}" onclick="event.stopPropagation()">查看大图</a>
-        ${isSaved ? `<a class="page-link" href="/" onclick="event.stopPropagation()">回主页面</a>` : ''}
       </div>
     </div>
   `;
@@ -234,25 +240,73 @@ function handleScreenerCardKey(event, symbol, name) {
   }
 }
 
+function notifyWatchlistUpdated(detail = {}) {
+  window.dispatchEvent(new CustomEvent('watchlist:updated', { detail }));
+}
+
+function getScreenerWatchButtonLabel(isSaved, isAdding) {
+  if (isAdding) return isSaved ? '取消中...' : '加入中...';
+  return isSaved ? '取消观察' : '加入观察股';
+}
+
+function syncScreenerWatchButtons(symbol, isSaved, isAdding = false) {
+  document.querySelectorAll(`[data-watch-symbol="${symbol}"]`).forEach(button => {
+    button.dataset.watchSaved = isSaved ? 'true' : 'false';
+    button.disabled = !!isAdding;
+    button.classList.toggle('is-saved', !!isSaved);
+    button.textContent = getScreenerWatchButtonLabel(isSaved, isAdding);
+  });
+}
+
+function handleScreenerWatchClick(button) {
+  const symbol = button?.dataset?.watchSymbol;
+  if (!symbol) return;
+  const name = button.dataset.watchName || '';
+  const isSaved = button.dataset.watchSaved === 'true';
+  toggleScreenerWatch(symbol, name, isSaved);
+}
+
 async function addScreenerStock(symbol, name) {
+  const res = await fetch('/api/add_stock', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: symbol, name }),
+  });
+  const data = await res.json();
+  if (!data.ok && data.error !== 'already exists') {
+    throw new Error(data.error || '蜉蜈･螟ｱ雍･');
+  }
+}
+
+async function removeScreenerStock(symbol) {
+  const res = await fetch('/api/remove_stock', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code: symbol }),
+  });
+  const data = await res.json();
+  if (!data.ok) {
+    throw new Error(data.error || '蜿匁ｶ亥､ｱ雍･');
+  }
+}
+
+async function toggleScreenerWatch(symbol, name, isSaved) {
   if (ScreenerPage.adding.has(symbol)) return;
   ScreenerPage.adding.add(symbol);
-  loadScreenerResults();
+  syncScreenerWatchButtons(symbol, isSaved, true);
   try {
-    const res = await fetch('/api/add_stock', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ code: symbol, name }),
-    });
-    const data = await res.json();
-    if (!data.ok && data.error !== 'already exists') {
-      throw new Error(data.error || '加入失败');
+    if (isSaved) {
+      await removeScreenerStock(symbol);
+    } else {
+      await addScreenerStock(symbol, name);
     }
+    syncScreenerWatchButtons(symbol, !isSaved, false);
+    notifyWatchlistUpdated({ symbol, source: 'screener', action: isSaved ? 'remove' : 'add' });
   } catch (e) {
-    alert(`加入失败：${e.message}`);
+    alert(`${isSaved ? '取消失败' : '加入失败'}: ${e.message}`);
+    syncScreenerWatchButtons(symbol, isSaved, false);
   } finally {
     ScreenerPage.adding.delete(symbol);
-    loadScreenerResults();
   }
 }
 
@@ -276,3 +330,5 @@ async function loadScreenerResults() {
 bindScreenerControls();
 updateUniverseHeader(ScreenerUniverseMeta.core45.label);
 loadScreenerResults();
+
+

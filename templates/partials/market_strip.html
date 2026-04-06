@@ -1,0 +1,22 @@
+<div class="market-strip">
+  <div class="market-strip-card">
+    <div class="market-strip-label"><span class="market-strip-badge">NI225</span>日经平均</div>
+    <div class="market-strip-value" id="wlNi225">--</div>
+  </div>
+  <div class="market-strip-card">
+    <div class="market-strip-label"><span class="market-strip-badge">TPX</span>TOPIX</div>
+    <div class="market-strip-value" id="wlTopix">--</div>
+  </div>
+  <div class="market-strip-card market-strip-card-refresh">
+    <div class="market-strip-meta">
+      <div class="status-pill market-status-pill">
+        <div class="dot" id="statusDot"></div>
+        <span id="statusText">加载中...</span>
+      </div>
+      <div class="market-refresh-meta">
+        <span id="cdText">-- 秒后刷新</span>
+        <button class="market-refresh-btn" type="button" onclick="refresh()">立即刷新</button>
+      </div>
+    </div>
+  </div>
+</div>

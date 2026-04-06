@@ -1,22 +1,37 @@
 <aside class="watchlist" id="watchlist">
+  <div class="wl-resizer" id="wlResizer" aria-hidden="true"></div>
   <div class="wl-collapse-rail">
     <button class="wl-collapse-btn" type="button" id="wlCollapseBtn" title="折叠自选栏">☰</button>
   </div>
   <div class="wl-header">
     <span class="wl-title">自选列表</span>
+    <button class="wl-add-trigger" type="button" id="wlAddTriggerBtn">+ 添加</button>
+  </div>
+  <div class="wl-toolbar">
     <div class="wl-tabs">
       <button class="wl-tab active" type="button" data-wl-tab="holding">已持有</button>
       <button class="wl-tab" type="button" data-wl-tab="watch">观察中</button>
       <button class="wl-tab" type="button" data-wl-tab="all">全部</button>
     </div>
-  </div>
-
-  <div class="wl-add-row">
-    <div class="wl-add-main">
-      <input type="text" id="addInput" placeholder="输入股票代码，例如 7203" maxlength="10" />
-      <button class="btn-add" type="button" id="wlAddBtn">+ 添加</button>
+    <div class="wl-filter-wrap is-hidden" id="wlFilterWrap">
+      <button class="wl-filter-trigger" type="button" id="wlFilterBtn" aria-expanded="false">
+        <span class="wl-filter-trigger-dot" id="wlFilterBtnDot"></span>
+        <span id="wlFilterBtnLabel">颜色</span>
+        <span class="wl-filter-caret">⌄</span>
+      </button>
+      <div class="wl-filter-menu" id="wlFilterMenu" style="display:none">
+        <button type="button" class="wl-filter-menu-item active" data-filter-color="">
+          <span class="wl-filter-menu-text">全部颜色</span>
+        </button>
+        <button type="button" class="wl-filter-menu-item" data-filter-color="red"><span class="wl-filter-circle red"></span><span class="wl-filter-menu-text">红</span></button>
+        <button type="button" class="wl-filter-menu-item" data-filter-color="blue"><span class="wl-filter-circle blue"></span><span class="wl-filter-menu-text">蓝</span></button>
+        <button type="button" class="wl-filter-menu-item" data-filter-color="green"><span class="wl-filter-circle green"></span><span class="wl-filter-menu-text">绿</span></button>
+        <button type="button" class="wl-filter-menu-item" data-filter-color="yellow"><span class="wl-filter-circle yellow"></span><span class="wl-filter-menu-text">黄</span></button>
+        <button type="button" class="wl-filter-menu-item" data-filter-color="purple"><span class="wl-filter-circle purple"></span><span class="wl-filter-menu-text">紫</span></button>
+        <button type="button" class="wl-filter-menu-item" data-filter-color="cyan"><span class="wl-filter-circle cyan"></span><span class="wl-filter-menu-text">青</span></button>
+        <button type="button" class="wl-filter-menu-item" data-filter-color="pink"><span class="wl-filter-circle pink"></span><span class="wl-filter-menu-text">粉</span></button>
+      </div>
     </div>
-    <span class="err" id="addErr" style="display:none">未找到股票代码</span>
   </div>
 
   <div class="wl-cols">
@@ -28,23 +43,28 @@
 
   <div class="wl-rows" id="wlRows"></div>
 
+  <div class="wl-detail-resizer" id="wlDetailResizer" aria-hidden="true"></div>
   <div class="wl-detail" id="wlDetail">
     <div class="wl-detail-empty">点击一只股票，这里会显示详情。</div>
   </div>
 
-  <div class="wl-footer">
-    <div class="wl-index-row">
-      <span class="wl-index-name"><span class="wl-index-badge">NI225</span>日经平均</span>
-      <span class="wl-index-val" id="wlNi225">--</span>
-    </div>
-    <div class="wl-index-row">
-      <span class="wl-index-name"><span class="wl-index-badge">TPX</span>TOPIX</span>
-      <span class="wl-index-val" id="wlTopix">--</span>
-    </div>
-  </div>
-
   <div class="wl-context-menu" id="wlContextMenu" style="display:none">
     <button type="button" class="wl-menu-item" data-wl-menu="edit">编辑状态</button>
+    <div class="wl-marker-menu">
+      <div class="wl-marker-menu-head">
+        <span id="wlMarkerMenuLabel">标记</span>
+        <button type="button" class="wl-menu-item wl-menu-link" data-wl-menu="clear-marker">取消标记</button>
+      </div>
+      <div class="wl-marker-palette">
+        <button type="button" class="wl-marker-dot red" data-marker-color="red" title="红色"></button>
+        <button type="button" class="wl-marker-dot blue" data-marker-color="blue" title="蓝色"></button>
+        <button type="button" class="wl-marker-dot green" data-marker-color="green" title="绿色"></button>
+        <button type="button" class="wl-marker-dot yellow" data-marker-color="yellow" title="黄色"></button>
+        <button type="button" class="wl-marker-dot purple" data-marker-color="purple" title="紫色"></button>
+        <button type="button" class="wl-marker-dot cyan" data-marker-color="cyan" title="青色"></button>
+        <button type="button" class="wl-marker-dot pink" data-marker-color="pink" title="粉色"></button>
+      </div>
+    </div>
     <button type="button" class="wl-menu-item" data-wl-menu="watch">加入观察</button>
   </div>
 
@@ -66,4 +86,18 @@
       </div>
     </div>
   </div>
+
+  <div class="wl-modal-bg" id="wlAddModal" style="display:none">
+    <div class="wl-modal">
+      <div class="wl-modal-title">添加股票</div>
+      <label class="wl-modal-label" for="wlAddCodeInput">股票代码</label>
+      <input id="wlAddCodeInput" class="wl-modal-input" type="text" maxlength="10" placeholder="例如 7203" />
+      <div class="err" id="wlAddCodeErr" style="display:none">未找到股票代码</div>
+      <div class="wl-modal-actions">
+        <button type="button" class="btn-cancel" id="wlAddCancel">取消</button>
+        <button type="button" class="btn-save" id="wlAddBtn">添加</button>
+      </div>
+    </div>
+  </div>
+
 </aside>

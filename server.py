@@ -144,11 +144,15 @@ DEFAULT_PORTFOLIO = [
 _cache = {}
 _cache_lock = threading.Lock()
 CACHE_TTL = env_int("QUOTE_CACHE_TTL", 60)
+SNAPSHOT_CACHE_TTL = env_int("DASHBOARD_SNAPSHOT_TTL", 15)
 QUOTE_FETCH_WORKERS = env_int("QUOTE_FETCH_WORKERS", 6)
 SCREENER_FETCH_WORKERS = env_int("SCREENER_FETCH_WORKERS", 8)
 PORTFOLIO_BACKUP_LIMIT = max(3, env_int("PORTFOLIO_BACKUP_LIMIT", 20))
+TWELVEDATA_API_KEY = os.environ.get("TWELVEDATA_API_KEY", "").strip()
 QUOTE_EXECUTOR = ThreadPoolExecutor(max_workers=max(2, QUOTE_FETCH_WORKERS))
 SCREENER_EXECUTOR = ThreadPoolExecutor(max_workers=max(2, SCREENER_FETCH_WORKERS))
+_dashboard_snapshot_cache = {"ts": 0.0, "data": None}
+_dashboard_snapshot_lock = threading.Lock()
 
 # Override startup defaults with ASCII-safe Unicode escapes so Japanese names
 # stay correct even on terminals with a non-UTF-8 code page.
@@ -445,6 +449,7 @@ def translate_to_zh(text: str) -> str:
 # ────────────────────────────────────────
 
 def _normalize_portfolio_items(data):
+    allowed_marker_colors = {"red", "blue", "green", "yellow", "purple", "cyan", "pink", ""}
     normalized = []
     for item in data or []:
         code = str(item.get("code", "")).upper().strip()
@@ -457,12 +462,16 @@ def _normalize_portfolio_items(data):
         status = item.get("status") or ("holding" if shares > 0 else "watch")
         if status not in {"holding", "watch"}:
             status = "holding" if shares > 0 else "watch"
+        marker_color = str(item.get("marker_color", "") or "").strip().lower()
+        if marker_color not in allowed_marker_colors:
+            marker_color = ""
         normalized.append({
             "code": code,
             "name": resolve_stock_name(code, item.get("name")),
             "shares": shares if status == "holding" else 0,
             "cost": cost if status == "holding" else 0,
             "status": status,
+            "marker_color": marker_color,
         })
     return normalized or list(DEFAULT_PORTFOLIO)
 
@@ -637,6 +646,61 @@ def fetch_quote(symbol):
         return result
     except Exception as e:
         return {"symbol": symbol, "error": str(e)}
+
+
+def fetch_twelvedata_quote(symbol, api_key=None):
+    resolved_symbol = (symbol or "").strip().upper()
+    if not resolved_symbol:
+        return {"ok": False, "error": "missing symbol"}
+
+    key = (api_key or TWELVEDATA_API_KEY or "").strip()
+    if not key:
+        return {"ok": False, "error": "missing api key"}
+
+    url = "https://api.twelvedata.com/quote"
+    params = {"symbol": resolved_symbol, "apikey": key}
+    started = time.time()
+    try:
+        resp = requests.get(url, params=params, timeout=10, headers=HEADERS)
+        elapsed_ms = int((time.time() - started) * 1000)
+        data = resp.json()
+    except Exception as e:
+        return {
+            "ok": False,
+            "symbol": resolved_symbol,
+            "provider": "twelvedata",
+            "error": str(e),
+        }
+
+    if not resp.ok:
+        return {
+            "ok": False,
+            "symbol": resolved_symbol,
+            "provider": "twelvedata",
+            "status_code": resp.status_code,
+            "error": data.get("message") or data.get("status") or f"HTTP {resp.status_code}",
+            "raw": data,
+        }
+
+    if isinstance(data, dict) and data.get("status") == "error":
+        return {
+            "ok": False,
+            "symbol": resolved_symbol,
+            "provider": "twelvedata",
+            "status_code": resp.status_code,
+            "error": data.get("message") or "twelvedata error",
+            "raw": data,
+        }
+
+    return {
+        "ok": True,
+        "provider": "twelvedata",
+        "symbol": resolved_symbol,
+        "status_code": resp.status_code,
+        "latency_ms": elapsed_ms,
+        "used_demo_key": key == "demo",
+        "data": data,
+    }
 
 
 # ────────────────────────────────────────
@@ -1098,13 +1162,18 @@ TOPIC_CONFIG["nikkei"].update({
     "queries": [
         "Nikkei 225 OR TOPIX OR Japan stocks OR Tokyo stocks earnings OR outlook OR guidance Reuters Bloomberg Nikkei Asia CNBC",
         "BOJ OR Bank of Japan OR USDJPY OR yen Japan market yield Reuters Bloomberg CNBC",
-        "Japan exporters OR Toyota OR Sony OR Nintendo OR Hitachi OR SoftBank OR Fast Retailing OR Tokyo Electron Japan stocks demand OR tariff Reuters Bloomberg CNBC",
-        "Mitsubishi UFJ OR Sumitomo Mitsui OR Mitsubishi Corp OR Itochu OR Marubeni OR Tokyo Electron Japan market Reuters Bloomberg CNBC",
+        "Japan core companies OR Toyota OR Sony OR Nintendo OR Hitachi OR SoftBank OR SoftBank Group OR Fast Retailing OR Tokyo Electron Japan stocks demand OR tariff Reuters Bloomberg CNBC",
+        "Mitsubishi UFJ OR Sumitomo Mitsui OR Mitsubishi Corp OR Itochu OR Marubeni OR Tokyo Electron OR Nintendo OR SoftBank Group Japan market Reuters Bloomberg CNBC",
     ],
     "drivers": {
         "日元汇率": ["usd/jpy", "usdjpy", "yen", "jpy", "dollar-yen", "weaker yen", "stronger yen", "fx"],
         "日本央行": ["boj", "bank of japan", "ueda", "rate", "rates", "yield", "jgb", "policy meeting", "normalization"],
         "全球风险偏好": ["wall street", "nasdaq", "s&p 500", "futures", "risk-on", "risk off", "treasury yield", "vix"],
+        "日经核心公司": [
+            "softbank", "softbank group", "toyota", "sony", "nintendo", "hitachi",
+            "tokyo electron", "fast retailing", "mitsubishi ufj", "sumitomo mitsui",
+            "任天堂", "软银", "东京电子", "丰田", "索尼", "三菱ufj",
+        ],
         "出口龙头": ["toyota", "sony", "nintendo", "hitachi", "export", "exporters", "machinery", "factory activity"],
         "财报指引": ["earnings", "guidance", "profit", "results", "forecast", "outlook", "operating profit", "revision"],
         "回购分红治理": ["buyback", "shareholder return", "dividend", "payout", "governance", "tse reform", "price-to-book", "activist"],
@@ -1120,16 +1189,19 @@ TOPIC_CONFIG["nikkei"].update({
         "japan inc", "asia stocks", "tokyo-listed", "japanese exporters", "japan earnings",
         "yen-sensitive", "tse prime", "softbank", "fast retailing", "tokyo electron",
         "mufg", "mitsubishi ufj", "sumitomo mitsui", "mitsubishi corp", "itochu", "marubeni",
+        "softbank group", "toyota", "sony", "nintendo", "hitachi", "任天堂", "软银", "东京电子",
     ],
     "core_topic_terms": [
         "nikkei", "nikkei 225", "topix", "japan stocks", "japanese stocks", "tokyo stocks",
         "tokyo stock exchange", "boj", "bank of japan", "usd/jpy", "yen", "japanese exporters",
+        "softbank", "softbank group", "tokyo electron", "nintendo",
     ],
     "anchor_terms": [
         "nikkei", "nikkei 225", "topix", "japan stocks", "japanese stocks", "tokyo stocks",
         "tokyo stock exchange", "boj", "bank of japan", "usd/jpy", "yen", "jgb", "exporters",
         "toyota", "sony", "nintendo", "hitachi", "softbank", "fast retailing", "tokyo electron",
         "mitsubishi ufj", "sumitomo mitsui", "mitsubishi corp", "itochu", "marubeni",
+        "softbank group", "任天堂", "软银", "东京电子",
     ],
     "fallback_driver": "最新市场动态",
 })
@@ -1139,12 +1211,14 @@ TOPIC_CONFIG["semiconductor"].update({
         "semiconductor OR chip OR chips OR foundry OR TSMC OR Nvidia earnings OR guidance Reuters Bloomberg Nikkei Asia CNBC",
         "AI server OR GPU OR HBM OR memory OR datacenter Nvidia Micron SK hynix demand OR capex Reuters Bloomberg CNBC",
         "ASML OR Tokyo Electron OR Screen OR Advantest OR Lasertec OR Renesas OR SUMCO semiconductor restriction OR approval Reuters Bloomberg CNBC",
+        "OpenAI OR Google OR Alphabet OR Microsoft OR Meta OR Amazon AI model OR data center OR TPU OR custom chip Reuters Bloomberg CNBC The Information",
     ],
     "drivers": {
         "AI算力需求": ["ai", "nvidia", "gpu", "ai server", "datacenter", "blackwell", "grace blackwell", "inference", "training cluster"],
         "先进制程代工": ["tsmc", "2nm", "3nm", "5nm", "wafer", "foundry", "advanced packaging", "cowos", "packaging"],
         "设备资本开支": ["asml", "tokyo electron", "screen", "advantest", "lasertec", "capex", "equipment", "lithography", "wfe"],
         "HBM与存储": ["hbm", "dram", "nand", "memory", "sk hynix", "micron", "samsung", "ddr5", "bandwidth memory"],
+        "科技巨头AI": ["openai", "google", "alphabet", "microsoft", "meta", "amazon", "gemini", "chatgpt", "tpu", "custom chip"],
         "日本材料零部件": ["sumco", "shin-etsu", "jsr", "resonac", "wafer", "photoresist", "silicon", "substrate"],
         "政策限制": ["china", "export control", "sanction", "restriction", "tariff", "entity list", "license requirement"],
     },
@@ -1157,19 +1231,23 @@ TOPIC_CONFIG["semiconductor"].update({
         "renesas", "advantest", "lasertec", "cowos", "advanced packaging", "photoresist",
         "equipment", "wfe", "hynix", "micron", "capex", "earnings", "guidance", "outlook",
         "approval", "restriction", "export control", "inventory", "pricing", "demand",
+        "openai", "google", "alphabet", "microsoft", "meta", "amazon", "gemini", "chatgpt", "tpu", "custom chip",
     ],
     "core_topic_terms": [
         "semiconductor", "semiconductors", "chip", "chips", "foundry", "wafer",
         "hbm", "memory", "gpu", "ai server", "datacenter", "tsmc", "nvidia",
         "asml", "tokyo electron", "screen", "advantest", "lasertec", "renesas", "sumco",
+        "openai", "google", "alphabet", "microsoft", "meta", "amazon",
     ],
     "anchor_terms": [
         "semiconductor", "semiconductors", "chip", "chips", "foundry", "wafer",
         "hbm", "memory", "dram", "nand", "gpu", "ai server", "datacenter",
         "advanced packaging", "cowos", "equipment", "lithography", "wfe", "photoresist",
         "asml", "tokyo electron", "screen", "advantest", "lasertec", "tsmc", "micron", "sk hynix",
+        "openai", "google", "alphabet", "microsoft", "meta", "amazon", "gemini", "chatgpt", "tpu", "custom chip",
     ],
     "fallback_driver": "最新产业动态",
+    "title": "半导体+科技今天怎么看",
 })
 
 SCREENER_UNIVERSE_CORE_45 = [
@@ -1936,17 +2014,44 @@ def _detect_digest_tone(items, topic_cfg):
 def _build_digest_summary(topic, tone, drivers):
     lead = {
         "nikkei": {
-            "偏多": "今天先看顺风因素，日经更像是由汇率和风险偏好带动。",
+            "偏多": "今天先看顺风因素，日经多方趋势在扩散，市场主线从宏观延伸到核心权重公司。",
             "偏空": "今天先看压制因素，日经更像是被汇率和避险情绪拖累。",
             "震荡": "今天更像信息拉扯市，暂时没有单一主线完全占优。",
         },
         "semiconductor": {
-            "偏多": "今天半导体线索偏积极，资金更关注需求与资本开支。",
+            "偏多": "今天半导体与科技线索偏积极，资金更关注算力需求、平台资本开支和上游供给链。",
             "偏空": "今天半导体线索偏谨慎，市场更在意限制与需求波动。",
-            "震荡": "今天半导体消息偏分化，强弱信号同时存在。",
+            "震荡": "今天半导体与科技消息偏分化，强弱信号同时存在。",
+        },
+    }
+    impact_map = {
+        "nikkei": {
+            "日元汇率": "弱日元往往先抬升出口和权重股盈利预期",
+            "日本央行": "利率路径更温和时，估值和风险偏好会一起修复",
+            "全球风险偏好": "外盘风险偏好回暖时，日经大盘权重更容易同步受益",
+            "日经核心公司": "软银、东京电子、任天堂这类核心公司更容易把个股新闻放大成指数影响",
+            "出口龙头": "出口链回暖会直接强化制造业和汽车链情绪",
+            "财报指引": "上修指引会提升资金对后续盈利修复的把握",
+            "回购分红治理": "回购分红和治理改善会支撑估值中枢抬升",
+        },
+        "semiconductor": {
+            "AI算力需求": "算力需求增强会先传导到 GPU、服务器和先进封装链",
+            "先进制程代工": "先进制程紧张时，代工与封装环节的议价能力更强",
+            "设备资本开支": "资本开支扩张通常意味着设备与材料订单延续",
+            "HBM与存储": "HBM 和存储涨价会提升产业链利润弹性",
+            "科技巨头AI": "OpenAI、Google 等平台公司的模型和资本开支，会继续拉动芯片与数据中心需求预期",
+            "日本材料零部件": "材料零部件改善会加强日本半导体配套公司的景气确认",
+            "政策限制": "限制放松或预期改善时，板块风险溢价会回落",
         },
     }
     reason = "、".join(drivers[:3]) if drivers else "暂无单一主线"
+    impact = "；".join(
+        impact_map.get(topic, {}).get(driver, "")
+        for driver in drivers[:2]
+        if impact_map.get(topic, {}).get(driver)
+    )
+    if impact:
+        return f"{lead.get(topic, {}).get(tone, '')} 目前最值得看的驱动是：{reason}。多方趋势影响上，{impact}。"
     return f"{lead.get(topic, {}).get(tone, '')} 目前最值得看的驱动是：{reason}。"
 
 
@@ -2392,6 +2497,7 @@ def get_portfolio_quotes():
         q["shares"] = stock.get("shares", 0)
         q["cost"] = stock.get("cost", 0)
         q["status"] = stock.get("status", "holding" if stock.get("shares", 0) > 0 else "watch")
+        q["marker_color"] = stock.get("marker_color", "")
         if q["status"] == "holding" and q.get("price") and stock.get("shares") and stock.get("cost"):
             mv = q["price"] * stock["shares"]
             cv = stock["cost"] * stock["shares"]
@@ -2401,6 +2507,31 @@ def get_portfolio_quotes():
             q["cost_value"] = round(cv, 0)
         results.append(q)
     return results
+
+
+def invalidate_dashboard_snapshot_cache():
+    with _dashboard_snapshot_lock:
+        _dashboard_snapshot_cache["ts"] = 0.0
+        _dashboard_snapshot_cache["data"] = None
+
+
+def get_dashboard_snapshot_data():
+    now = time.time()
+    with _dashboard_snapshot_lock:
+        cached = _dashboard_snapshot_cache.get("data")
+        if cached and now - _dashboard_snapshot_cache.get("ts", 0.0) < SNAPSHOT_CACHE_TTL:
+            return cached
+
+    snapshot = {
+        "quotes": get_portfolio_quotes(),
+        "indexes": get_index_quotes_data(),
+        "updated": datetime.now().strftime("%H:%M:%S"),
+    }
+
+    with _dashboard_snapshot_lock:
+        _dashboard_snapshot_cache["ts"] = time.time()
+        _dashboard_snapshot_cache["data"] = snapshot
+    return snapshot
 
 
 def _sma(values, period):
@@ -2606,6 +2737,7 @@ def get_portfolio():
 @app.route("/api/portfolio", methods=["POST"])
 def update_portfolio():
     save_portfolio(request.json)
+    invalidate_dashboard_snapshot_cache()
     return jsonify({"ok": True})
 
 
@@ -2627,8 +2759,10 @@ def add_stock():
         "shares": 0,
         "cost": 0,
         "status": "watch",
+        "marker_color": "",
     })
     save_portfolio(portfolio)
+    invalidate_dashboard_snapshot_cache()
     return jsonify({"ok": True})
 
 
@@ -2637,6 +2771,7 @@ def remove_stock():
     code = request.json.get("code")
     portfolio = [s for s in load_portfolio() if s["code"] != code]
     save_portfolio(portfolio)
+    invalidate_dashboard_snapshot_cache()
     return jsonify({"ok": True})
 
 
@@ -2645,13 +2780,24 @@ def index_quotes():
     return jsonify(get_index_quotes_data())
 
 
+@app.route("/api/twelvedata_probe")
+def twelvedata_probe():
+    symbol = (request.args.get("symbol") or "AAPL").strip()
+    demo = str(request.args.get("demo", "")).strip().lower() in {"1", "true", "yes"}
+    api_key = "demo" if demo else TWELVEDATA_API_KEY
+    result = fetch_twelvedata_quote(symbol, api_key=api_key)
+    result["requested_at"] = datetime.now(JST).isoformat()
+    result["note"] = (
+        "demo key usually only works for limited sample symbols like AAPL; Japanese stocks typically require your own Twelve Data plan/key."
+        if demo
+        else "Set TWELVEDATA_API_KEY in your environment or .env before calling this endpoint for non-demo tests."
+    )
+    return jsonify(result)
+
+
 @app.route("/api/dashboard_snapshot")
 def dashboard_snapshot():
-    return jsonify({
-        "quotes": get_portfolio_quotes(),
-        "indexes": get_index_quotes_data(),
-        "updated": datetime.now().strftime("%H:%M:%S"),
-    })
+    return jsonify(get_dashboard_snapshot_data())
 
 
 @app.route("/api/stock_news")
