@@ -327,6 +327,10 @@ async function loadScreenerResults() {
   if (refreshBtn) refreshBtn.disabled = false;
 }
 
+if (typeof initGlobalThemeToggle === 'function') {
+  initGlobalThemeToggle();
+}
+
 bindScreenerControls();
 updateUniverseHeader(ScreenerUniverseMeta.core45.label);
 loadScreenerResults();

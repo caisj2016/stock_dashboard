@@ -62,6 +62,41 @@ async function fetchJson(url, options) {
   try {
     return text ? JSON.parse(text) : null;
   } catch (_) {
-    throw new Error('JSON \u89e3\u6790\u5931\u8d25');
+    const preview = text ? text.trim().slice(0, 120) : '';
+    throw new Error(preview ? `JSON 解析失败: ${preview}` : 'JSON 解析失败');
   }
 }
+
+function applyGlobalTheme(theme) {
+  const nextTheme = theme === 'light' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = nextTheme;
+  document.body.dataset.theme = nextTheme;
+  document.querySelectorAll('[data-global-theme-toggle]').forEach(btn => {
+    btn.setAttribute('aria-pressed', nextTheme === 'light' ? 'true' : 'false');
+  });
+  try {
+    window.localStorage.setItem('global-theme', nextTheme);
+  } catch (_) {}
+}
+
+function initGlobalThemeToggle() {
+  const toggles = Array.from(document.querySelectorAll('[data-global-theme-toggle]'));
+  if (!toggles.length) return;
+
+  let nextTheme = document.body.dataset.theme || 'dark';
+  try {
+    nextTheme = window.localStorage.getItem('global-theme') || nextTheme;
+  } catch (_) {}
+  applyGlobalTheme(nextTheme);
+
+  toggles.forEach(btn => {
+    if (btn.dataset.themeBound === '1') return;
+    btn.dataset.themeBound = '1';
+    btn.addEventListener('click', () => {
+      applyGlobalTheme(document.body.dataset.theme === 'light' ? 'dark' : 'light');
+    });
+  });
+}
+
+window.applyGlobalTheme = applyGlobalTheme;
+window.initGlobalThemeToggle = initGlobalThemeToggle;

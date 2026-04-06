@@ -47,6 +47,9 @@ function refreshTrumpIfLoaded() {
 }
 
 async function initApp() {
+  if (typeof initGlobalThemeToggle === 'function') {
+    initGlobalThemeToggle();
+  }
   AppState.trumpTimer = setInterval(refreshTrumpIfLoaded, 10 * 60 * 1000);
   await refresh();
   setupDashboardLazyLoad();

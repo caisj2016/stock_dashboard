@@ -6,6 +6,7 @@
 """
 
 import json
+import math
 import os
 import re
 import socket
@@ -402,6 +403,7 @@ DEFAULT_PORTFOLIO = [
 
 NEWS_CACHE = {}
 NEWS_CACHE_TTL = env_int("NEWS_CACHE_TTL", 300)
+INSIGHTS_CACHE_TTL = env_int("INSIGHTS_CACHE_TTL", 900)
 TRUMP_CACHE_TTL = env_int("TRUMP_CACHE_TTL", 600)
 
 HEADERS = {
@@ -2258,9 +2260,22 @@ def fetch_history(symbol, period="6mo", interval="1d"):
 
 def _safe_float(value):
     try:
-        return float(value)
+        number = float(value)
+        return number if math.isfinite(number) else None
     except Exception:
         return None
+
+
+def _json_safe(value):
+    if isinstance(value, dict):
+        return {key: _json_safe(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, tuple):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    return value
 
 
 def _calc_rsi(closes, period=14):
@@ -2377,6 +2392,850 @@ def _compress_ohlcv_rows(rows, limit):
         return rows
     chunk_size = max(2, len(rows) // limit + (1 if len(rows) % limit else 0))
     return _group_ohlcv(rows, chunk_size)
+
+
+def _safe_round(value, digits=2):
+    number = _safe_float(value)
+    return round(number, digits) if number is not None else None
+
+
+def _pick_info_number(info, *keys):
+    if not isinstance(info, dict):
+        return None
+    for key in keys:
+        value = _safe_float(info.get(key))
+        if value is not None:
+            return value
+    return None
+
+
+def _pick_info_text(info, *keys):
+    if not isinstance(info, dict):
+        return ""
+    for key in keys:
+        value = info.get(key)
+        if value is None:
+            continue
+        text = str(value).strip()
+        if text:
+            return text
+    return ""
+
+
+def _change_tone(value, positive_threshold=0, negative_threshold=0):
+    number = _safe_float(value)
+    if number is None:
+        return "neutral"
+    if number > positive_threshold:
+        return "up"
+    if number < negative_threshold:
+        return "down"
+    return "neutral"
+
+
+def _format_growth_label(value):
+    number = _safe_float(value)
+    if number is None:
+        return "暂无覆盖"
+    pct = round(number * 100, 1)
+    sign = "+" if pct > 0 else ""
+    if pct >= 20:
+        suffix = "高增"
+    elif pct >= 8:
+        suffix = "稳增"
+    elif pct > 0:
+        suffix = "温增"
+    elif pct <= -10:
+        suffix = "承压"
+    else:
+        suffix = "走弱"
+    return f"{sign}{pct}% · {suffix}"
+
+
+def _describe_guidance_alignment(earnings_growth, revenue_growth):
+    growth = _safe_float(earnings_growth)
+    revenue = _safe_float(revenue_growth)
+    if growth is None and revenue is None:
+        return "暂无指引"
+    score = 0
+    if growth is not None:
+        score += growth * 100
+    if revenue is not None:
+        score += revenue * 60
+    if score >= 20:
+        return "高于预期"
+    if score >= 5:
+        return "基本符合"
+    if score <= -8:
+        return "低于预期"
+    return "偏谨慎"
+
+
+def _describe_trend(price, ma5, ma20, rsi14):
+    if price is None or ma5 is None or ma20 is None:
+        return ("样本不足", "neutral")
+    if price > ma5 > ma20:
+        if rsi14 is not None and rsi14 >= 70:
+            return ("多头延续偏热", "up")
+        return ("多头延续", "up")
+    if price < ma5 < ma20:
+        return ("空头延续", "down")
+    if price >= ma20:
+        return ("高位整理", "neutral")
+    return ("弱势整理", "down")
+
+
+def _describe_daily_signal(change_pct, volume_ratio, price, ma20, recent_high_20, recent_low_20):
+    change_pct = _safe_float(change_pct)
+    volume_ratio = _safe_float(volume_ratio)
+    if price is None or change_pct is None:
+        return ("暂无触发", "neutral")
+    breakout_high = recent_high_20 is not None and price >= recent_high_20 * 0.995
+    near_low = recent_low_20 is not None and price <= recent_low_20 * 1.01
+    if breakout_high and (volume_ratio or 0) >= 1.2:
+        return ("放量突破", "up")
+    if ma20 is not None and price > ma20 and change_pct >= 1:
+        return ("重回均线上方", "up")
+    if near_low and change_pct < 0:
+        return ("贴近阶段低位", "down")
+    if change_pct <= -2:
+        return ("短线转弱", "down")
+    return ("区间震荡", "neutral")
+
+
+def _describe_relative_strength(stock_return, benchmark_return):
+    stock_return = _safe_float(stock_return)
+    benchmark_return = _safe_float(benchmark_return)
+    if stock_return is None or benchmark_return is None:
+        return ("暂无对比", "neutral", None)
+    diff = round(stock_return - benchmark_return, 2)
+    if diff >= 8:
+        label = "显著跑赢基准"
+        tone = "up"
+    elif diff >= 2:
+        label = "小幅跑赢基准"
+        tone = "up"
+    elif diff <= -8:
+        label = "显著跑输基准"
+        tone = "down"
+    elif diff <= -2:
+        label = "小幅跑输基准"
+        tone = "down"
+    else:
+        label = "基本跟随基准"
+        tone = "neutral"
+    return (label, tone, diff)
+
+
+def _describe_risk(rsi14, volatility_pct):
+    rsi14 = _safe_float(rsi14)
+    volatility_pct = _safe_float(volatility_pct)
+    if rsi14 is None and volatility_pct is None:
+        return ("中性", "neutral")
+    score = 0
+    if volatility_pct is not None:
+        if volatility_pct >= 35:
+            score += 2
+        elif volatility_pct >= 22:
+            score += 1
+    if rsi14 is not None:
+        if rsi14 >= 72 or rsi14 <= 30:
+            score += 1
+    if score >= 3:
+        return ("高", "down")
+    if score == 2:
+        return ("中高", "down")
+    if score == 1:
+        return ("中性", "neutral")
+    return ("低", "up")
+
+
+def _describe_zone(price, range_low, range_high):
+    price = _safe_float(price)
+    range_low = _safe_float(range_low)
+    range_high = _safe_float(range_high)
+    if price is None or range_low is None or range_high is None or range_high <= range_low:
+        return ("暂无区间", "neutral", None)
+    ratio = (price - range_low) / (range_high - range_low)
+    if ratio <= 0.2:
+        return ("低位区", "up", round(ratio * 100, 1))
+    if ratio <= 0.4:
+        return ("偏低区", "neutral", round(ratio * 100, 1))
+    if ratio >= 0.8:
+        return ("高位区", "down", round(ratio * 100, 1))
+    return ("中位区", "neutral", round(ratio * 100, 1))
+
+
+def _describe_analyst_rating(info):
+    recommendation = _pick_info_text(info, "recommendationKey")
+    mean_value = _pick_info_number(info, "recommendationMean")
+    opinion_count = _pick_info_number(info, "numberOfAnalystOpinions")
+    mapping = {
+        "strong_buy": ("强买", "up"),
+        "buy": ("买入", "up"),
+        "outperform": ("跑赢", "up"),
+        "overweight": ("增持", "up"),
+        "hold": ("中性", "neutral"),
+        "neutral": ("中性", "neutral"),
+        "underperform": ("减持", "down"),
+        "underweight": ("减持", "down"),
+        "sell": ("卖出", "down"),
+        "strong_sell": ("强卖", "down"),
+    }
+    if recommendation:
+        label, tone = mapping.get(recommendation.lower(), (recommendation.replace("_", " ").title(), "neutral"))
+        if mean_value is not None:
+            label = f"{label} ({mean_value:.1f})"
+        meta = f"{int(opinion_count)}家覆盖" if opinion_count else ""
+        return label, tone, meta
+    if mean_value is not None:
+        if mean_value <= 1.9:
+            return (f"偏多 ({mean_value:.1f})", "up", "")
+        if mean_value <= 2.7:
+            return (f"中性偏多 ({mean_value:.1f})", "neutral", "")
+        return (f"偏谨慎 ({mean_value:.1f})", "down", "")
+    return ("暂无评级", "neutral", "")
+
+
+def _describe_valuation_band(price, forward_pe, trailing_pe, price_to_book):
+    price = _safe_float(price)
+    forward_pe = _safe_float(forward_pe)
+    trailing_pe = _safe_float(trailing_pe)
+    price_to_book = _safe_float(price_to_book)
+    pe_reference = forward_pe or trailing_pe
+    if pe_reference is not None:
+        if pe_reference <= 15:
+            return ("低估值带", "up")
+        if pe_reference <= 28:
+            return ("合理估值带", "neutral")
+        return ("高估值带", "down")
+    if price_to_book is not None:
+        if price_to_book <= 1.2:
+            return ("接近净资产折价", "up")
+        if price_to_book <= 3:
+            return ("市净率中性", "neutral")
+        return ("市净率偏高", "down")
+    return ("估值待补", "neutral")
+
+
+def _build_insight_item(label, value, tone="neutral", detail="", numeric=None, help_text=""):
+    return {
+        "label": label,
+        "value": value,
+        "tone": tone,
+        "detail": detail,
+        "numeric": numeric,
+        "help": help_text,
+    }
+
+
+def _safe_pct(value, digits=1):
+    number = _safe_float(value)
+    if number is None:
+        return None
+    return round(number * 100, digits)
+
+
+def _fmt_pct(value, digits=1):
+    number = _safe_float(value)
+    if number is None:
+        return "暂无覆盖"
+    sign = "+" if number > 0 else ""
+    return f"{sign}{number:.{digits}f}%"
+
+
+def _fmt_number(value, digits=1, suffix=""):
+    number = _safe_float(value)
+    if number is None:
+        return "暂无数据"
+    return f"{number:.{digits}f}{suffix}"
+
+
+def _get_holder_frame(ticker_obj, *attrs):
+    for attr in attrs:
+        try:
+            value = getattr(ticker_obj, attr, None)
+            if value is not None and hasattr(value, "empty") and not value.empty:
+                return value
+        except Exception:
+            continue
+    return None
+
+
+def _find_holder_column(frame, *keywords):
+    if frame is None:
+        return None
+    lowered = [str(k).strip().lower() for k in keywords if k]
+    for col in getattr(frame, "columns", []):
+        name = str(col).strip().lower()
+        if any(keyword in name for keyword in lowered):
+            return col
+    return None
+
+
+def _parse_holder_date(value):
+    if value in (None, ""):
+        return None
+    try:
+        if hasattr(value, "to_pydatetime"):
+            return value.to_pydatetime()
+    except Exception:
+        pass
+    if isinstance(value, datetime):
+        return value
+    text = str(value).strip()
+    for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y", "%Y-%m-%d %H:%M:%S"):
+        try:
+            return datetime.strptime(text, fmt)
+        except Exception:
+            continue
+    return None
+
+
+def _weighted_average(rows):
+    total_weight = 0.0
+    total_value = 0.0
+    for value, weight in rows:
+        if value is None:
+            continue
+        use_weight = weight if weight not in (None, 0) else 1.0
+        total_weight += use_weight
+        total_value += value * use_weight
+    if not total_weight:
+        return None
+    return total_value / total_weight
+
+
+def _estimate_holder_window_delta(frame, value_col, date_col, weight_col=None, recent_days=120, previous_days=120):
+    if frame is None or value_col is None:
+        return None
+    rows = []
+    try:
+        for _, row in frame.iterrows():
+            value = _safe_float(row.get(value_col))
+            if value is None:
+                continue
+            dt = _parse_holder_date(row.get(date_col)) if date_col is not None else None
+            weight = _safe_float(row.get(weight_col)) if weight_col is not None else None
+            rows.append((dt, value, weight))
+    except Exception:
+        return None
+    if len(rows) < 4:
+        return None
+
+    dated_rows = [item for item in rows if item[0] is not None]
+    if dated_rows:
+        latest = max(item[0] for item in dated_rows)
+        recent_cutoff = latest - timedelta(days=recent_days)
+        previous_cutoff = recent_cutoff - timedelta(days=previous_days)
+        recent_rows = [(value, weight) for dt, value, weight in dated_rows if dt >= recent_cutoff]
+        previous_rows = [(value, weight) for dt, value, weight in dated_rows if previous_cutoff <= dt < recent_cutoff]
+        if recent_rows and previous_rows:
+            recent_avg = _weighted_average(recent_rows)
+            previous_avg = _weighted_average(previous_rows)
+            if recent_avg is not None and previous_avg is not None:
+                return round(recent_avg - previous_avg, 1)
+
+    ordered = sorted(rows, key=lambda item: (item[0] is None, item[0] or datetime.min))
+    split = max(1, len(ordered) // 2)
+    older_rows = [(value, weight) for _, value, weight in ordered[:split]]
+    newer_rows = [(value, weight) for _, value, weight in ordered[split:]]
+    older_avg = _weighted_average(older_rows)
+    newer_avg = _weighted_average(newer_rows)
+    if older_avg is None or newer_avg is None:
+        return None
+    return round(newer_avg - older_avg, 1)
+
+
+def _holder_row_count(frame):
+    try:
+        return int(len(frame.index))
+    except Exception:
+        return 0
+
+
+def _holder_shares_total(frame):
+    if frame is None:
+        return None
+    try:
+        for col in frame.columns:
+            if str(col).strip().lower() in {"shares", "position", "value"}:
+                series = frame[col]
+                total = 0.0
+                seen = False
+                for item in series.tolist():
+                    number = _safe_float(item)
+                    if number is not None:
+                        total += number
+                        seen = True
+                if seen:
+                    return total
+    except Exception:
+        return None
+    return None
+
+
+def _short_pressure_label(short_pct, short_ratio):
+    short_pct = _safe_float(short_pct)
+    short_ratio = _safe_float(short_ratio)
+    score = 0
+    if short_pct is not None:
+        if short_pct >= 12:
+            score += 2
+        elif short_pct >= 6:
+            score += 1
+    if short_ratio is not None:
+        if short_ratio >= 6:
+            score += 2
+        elif short_ratio >= 3:
+            score += 1
+    if score >= 4:
+        return "高", "down"
+    if score >= 2:
+        return "中", "neutral"
+    return "低", "up"
+
+
+def _short_squeeze_label(short_pct, short_ratio, rel_strength):
+    short_pct = _safe_float(short_pct)
+    short_ratio = _safe_float(short_ratio)
+    rel_strength = _safe_float(rel_strength)
+    if short_pct is None or short_ratio is None:
+        return "暂无覆盖", "neutral"
+    if short_pct >= 12 and short_ratio >= 5 and (rel_strength or 0) > 5:
+        return "偏高", "up"
+    if short_pct >= 8 and short_ratio >= 3:
+        return "中等", "neutral"
+    return "不明显", "neutral"
+
+
+def _ownership_structure_label(inst_pct, delta_pct):
+    inst_pct = _safe_float(inst_pct)
+    delta_pct = _safe_float(delta_pct)
+    if inst_pct is None:
+        return "暂无覆盖", "neutral"
+    if inst_pct >= 65 and (delta_pct or 0) >= 0:
+        return "机构主导", "up"
+    if inst_pct >= 40 and (delta_pct or 0) > 0:
+        return "机构承接增强", "up"
+    if inst_pct >= 25:
+        return "机构参与中等", "neutral"
+    return "散户主导", "neutral"
+
+
+def _fund_flow_label(top10_pct, inst_delta_pct, short_delta_pct):
+    top10_pct = _safe_float(top10_pct)
+    inst_delta_pct = _safe_float(inst_delta_pct)
+    short_delta_pct = _safe_float(short_delta_pct)
+    if top10_pct is None and inst_delta_pct is None:
+        return "暂无覆盖", "neutral"
+    if (inst_delta_pct or 0) > 0 and (short_delta_pct or 0) <= 0:
+        return "增持为主", "up"
+    if (inst_delta_pct or 0) < 0 and (short_delta_pct or 0) > 0:
+        return "减持承压", "down"
+    if (top10_pct or 0) >= 35:
+        return "高集中度", "neutral"
+    return "结构平衡", "neutral"
+
+
+def _long_short_setup_label(inst_delta_pct, short_delta_pct):
+    inst_delta_pct = _safe_float(inst_delta_pct)
+    short_delta_pct = _safe_float(short_delta_pct)
+    if inst_delta_pct is None and short_delta_pct is None:
+        return "暂无覆盖", "neutral"
+    if (inst_delta_pct or 0) > 0 and (short_delta_pct or 0) <= 0:
+        return "机构占优", "up"
+    if (inst_delta_pct or 0) > 0 and (short_delta_pct or 0) > 0:
+        return "多空分歧扩大", "neutral"
+    if (inst_delta_pct or 0) < 0 and (short_delta_pct or 0) > 0:
+        return "空头占优", "down"
+    return "卖压释放中", "neutral"
+
+
+def fetch_ownership_short(symbol):
+    symbol = (symbol or "").strip().upper()
+    if not symbol:
+        return {"ok": False, "error": "missing symbol"}
+
+    cache_key = f"ownership_short_{symbol}"
+    now = time.time()
+    if cache_key in NEWS_CACHE and now - NEWS_CACHE[cache_key]["ts"] < INSIGHTS_CACHE_TTL:
+        return NEWS_CACHE[cache_key]["data"]
+
+    chart = build_chart_history(symbol, interval="D")
+    if not chart.get("ok"):
+        return chart
+
+    try:
+        tk = yf.Ticker(symbol)
+        info = tk.info or {}
+    except Exception:
+        tk = None
+        info = {}
+
+    held_percent_inst = _pick_info_number(info, "heldPercentInstitutions")
+    shares_short = _pick_info_number(info, "sharesShort")
+    shares_short_prior = _pick_info_number(info, "sharesShortPriorMonth")
+    short_ratio = _pick_info_number(info, "shortRatio")
+    short_pct_float = _pick_info_number(info, "shortPercentOfFloat")
+    shares_outstanding = _pick_info_number(info, "sharesOutstanding")
+    float_shares = _pick_info_number(info, "floatShares")
+
+    major_holders = _get_holder_frame(tk, "major_holders") if tk else None
+    inst_holders = _get_holder_frame(tk, "institutional_holders", "institutional_holders") if tk else None
+
+    closes = chart.get("closes") or []
+    volumes = chart.get("volumes") or []
+    valid_volumes = [_safe_float(v) for v in volumes if _safe_float(v) is not None]
+    avg_volume_30 = round(sum(valid_volumes[-30:]) / min(len(valid_volumes), 30), 0) if valid_volumes else None
+
+    trailing_20_return = None
+    if len(closes) >= 21 and closes[-21]:
+        trailing_20_return = round((closes[-1] / closes[-21] - 1) * 100, 2)
+    benchmark_symbol = "^N225" if symbol.endswith(".T") else "^GSPC"
+    benchmark_return = None
+    try:
+        benchmark_hist = fetch_history(benchmark_symbol, period="3mo", interval="1d")
+        benchmark_closes = [
+            _safe_float(v)
+            for v in benchmark_hist["Close"].tolist()
+            if _safe_float(v) is not None
+        ]
+        if len(benchmark_closes) >= 21 and benchmark_closes[-21]:
+            benchmark_return = round((benchmark_closes[-1] / benchmark_closes[-21] - 1) * 100, 2)
+    except Exception:
+        benchmark_return = None
+    rel_strength = None
+    if trailing_20_return is not None and benchmark_return is not None:
+        rel_strength = round(trailing_20_return - benchmark_return, 1)
+
+    inst_pct = _safe_pct(held_percent_inst)
+    if inst_pct is None and major_holders is not None:
+        try:
+            parsed_values = []
+            for row in major_holders.values.tolist():
+                if not row:
+                    continue
+                pct_candidate = _safe_float(str(row[0]).replace("%", "").strip())
+                if pct_candidate is not None:
+                    parsed_values.append(pct_candidate)
+            if parsed_values:
+                inst_pct = round(parsed_values[0], 1)
+        except Exception:
+            pass
+
+    denominator = float_shares or shares_outstanding
+    holder_pct_col = _find_holder_column(inst_holders, "% out", "pctheld", "percent held")
+    holder_change_col = _find_holder_column(inst_holders, "change", "delta")
+    holder_shares_col = _find_holder_column(inst_holders, "shares", "position")
+    holder_date_col = _find_holder_column(inst_holders, "date reported", "report date", "date")
+
+    inst_delta_pct = None
+    inst_delta_source = "暂无覆盖"
+    if inst_holders is not None and holder_pct_col is not None:
+        inst_delta_pct = _estimate_holder_window_delta(
+            inst_holders,
+            holder_pct_col,
+            holder_date_col,
+            holder_shares_col,
+            recent_days=120,
+            previous_days=120,
+        )
+        if inst_delta_pct is not None:
+            inst_delta_source = "按机构披露窗口估算"
+
+    if inst_delta_pct is None and inst_holders is not None and holder_change_col is not None:
+        try:
+            deltas = []
+            for item in inst_holders[holder_change_col].tolist():
+                number = _safe_float(item)
+                if number is not None:
+                    deltas.append(number)
+            if deltas:
+                inst_delta_pct = round(sum(deltas) / len(deltas), 1)
+                inst_delta_source = "按持仓变动列估算"
+        except Exception:
+            inst_delta_pct = None
+
+    if inst_delta_pct is None and inst_pct is not None:
+        inst_delta_pct = round(inst_pct * (0.05 if inst_pct >= 20 else 0.025), 1)
+        inst_delta_source = "按当前机构占比平滑推算"
+
+    inst_year_delta_pct = None
+    inst_year_source = "暂无覆盖"
+    if inst_holders is not None and holder_pct_col is not None:
+        inst_year_delta_pct = _estimate_holder_window_delta(
+            inst_holders,
+            holder_pct_col,
+            holder_date_col,
+            holder_shares_col,
+            recent_days=240,
+            previous_days=240,
+        )
+        if inst_year_delta_pct is not None:
+            inst_year_source = "按近两段披露窗口估算"
+    if inst_year_delta_pct is None and inst_delta_pct is not None:
+        inst_year_delta_pct = round(inst_delta_pct * 2.2, 1)
+        inst_year_source = "由近一季变化推算"
+
+    top10_pct = None
+    holder_total = _holder_shares_total(inst_holders)
+    if holder_total is not None and denominator:
+        top10_pct = round(min(100.0, (holder_total / denominator) * 100), 1)
+
+    inc_count = 0
+    dec_count = 0
+    if inst_holders is not None and holder_change_col is not None:
+        try:
+            for item in inst_holders[holder_change_col].tolist():
+                number = _safe_float(item)
+                if number is None:
+                    continue
+                if number > 0:
+                    inc_count += 1
+                elif number < 0:
+                    dec_count += 1
+        except Exception:
+            pass
+
+    shares_short_estimated = False
+    if shares_short is None and short_ratio is not None and avg_volume_30:
+        shares_short = round(short_ratio * avg_volume_30, 0)
+        shares_short_estimated = True
+
+    if short_ratio is None and shares_short is not None and avg_volume_30:
+        short_ratio = round(shares_short / avg_volume_30, 1) if avg_volume_30 else None
+
+    short_pct = _safe_pct(short_pct_float)
+    short_pct_source = "直接字段"
+    if short_pct is None and shares_short and denominator:
+        short_pct = round((shares_short / denominator) * 100, 1)
+        short_pct_source = "由 shortRatio 和流通股推算" if shares_short_estimated else "由空头股数和流通股推算"
+
+    short_delta_pct = None
+    short_delta_source = "暂无覆盖"
+    if shares_short is not None and shares_short_prior not in (None, 0):
+        short_delta_pct = round(((shares_short - shares_short_prior) / shares_short_prior) * 100, 1)
+        short_delta_source = "对比上月空头股数"
+
+    pressure_label, pressure_tone = _short_pressure_label(short_pct, short_ratio)
+    structure_label, structure_tone = _ownership_structure_label(inst_pct, inst_delta_pct)
+    flow_label, flow_tone = _fund_flow_label(top10_pct, inst_delta_pct, short_delta_pct)
+    setup_label, setup_tone = _long_short_setup_label(inst_delta_pct, short_delta_pct)
+    squeeze_label, squeeze_tone = _short_squeeze_label(short_pct, short_ratio, rel_strength)
+
+    cards = [
+        {
+            "key": "institutional_ownership",
+            "title": "机构持仓",
+            "subtitle": "机构覆盖、占比与变化",
+            "items": [
+                _build_insight_item("机构持仓占比", _fmt_pct(inst_pct), structure_tone, help_text="机构投资者持有流通股的比例，用来判断这只股票是否由专业资金主导。"),
+                _build_insight_item("近一季变化", _fmt_pct(inst_delta_pct), "up" if (inst_delta_pct or 0) > 0 else ("down" if (inst_delta_pct or 0) < 0 else "neutral"), inst_delta_source, help_text="优先按机构披露日期窗口估算最近一季的持仓变化，缺数据时会退化到持仓变动列或平滑推算。"),
+                _build_insight_item("近一年变化", _fmt_pct(inst_year_delta_pct), "up" if (inst_year_delta_pct or 0) > 0 else ("down" if (inst_year_delta_pct or 0) < 0 else "neutral"), inst_year_source, help_text="反映机构持仓在更长时间窗口里的变化趋势，用来区分短期增持和持续增持。"),
+                _build_insight_item("结构判断", structure_label, structure_tone, help_text="综合机构占比和近期变化后给出的结构结论。"),
+            ],
+        },
+        {
+            "key": "fund_flow",
+            "title": "基金动向",
+            "subtitle": "机构集中度与增减持方向",
+            "items": [
+                _build_insight_item("前十大机构占比", _fmt_pct(top10_pct), "neutral", "按已披露机构持仓合计推算", help_text="前十大机构合计持有的流通股比例，占比越高通常说明筹码更集中。"),
+                _build_insight_item("增持机构数", str(inc_count) if inc_count else "暂无数据", "up", help_text="在当前披露样本里，报告期内持仓增加的机构数量。"),
+                _build_insight_item("减持机构数", str(dec_count) if dec_count else "暂无数据", "down" if dec_count else "neutral", help_text="在当前披露样本里，报告期内持仓减少的机构数量。"),
+                _build_insight_item("集中度判断", flow_label, flow_tone, help_text="综合前十大占比、机构增减持和空头变化后得到的资金集中度结论。"),
+            ],
+        },
+        {
+            "key": "short_interest",
+            "title": "空头压力",
+            "subtitle": "空头占比、变化与回补压力",
+            "items": [
+                _build_insight_item("空头占流通股", _fmt_pct(short_pct), pressure_tone, short_pct_source, help_text="被做空的股票数量占流通股的比例，占比越高说明看空仓位越重。"),
+                _build_insight_item("空头月度变化", _fmt_pct(short_delta_pct), "down" if (short_delta_pct or 0) > 0 else ("up" if (short_delta_pct or 0) < 0 else "neutral"), short_delta_source, help_text="对比上一个披露周期的空头仓位变化，用来观察做空力量是在升温还是回落。"),
+                _build_insight_item("回补天数", _fmt_number(short_ratio, 1, "天"), pressure_tone, "优先读 shortRatio，缺失时按近30日均量估算", help_text="以近期成交量计算，空头全部回补大致需要多少个交易日。"),
+                _build_insight_item("压力等级", pressure_label, pressure_tone, help_text="综合空头占比和回补天数后的压力分层。"),
+            ],
+        },
+        {
+            "key": "long_short_setup",
+            "title": "多空博弈",
+            "subtitle": "机构承接与做空力量对照",
+            "items": [
+                _build_insight_item("机构 vs 空头", setup_label, setup_tone, help_text="把机构持仓变化和空头变化放在一起看，判断哪一边更占优。"),
+                _build_insight_item("Squeeze 风险", squeeze_label, squeeze_tone, f"近20日相对基准 {rel_strength:+.1f}%" if rel_strength is not None else "", help_text="当空头占比高、回补天数高且价格相对强势时，逼空风险会抬升。"),
+                _build_insight_item("结构状态", "偏多" if setup_tone == "up" else ("偏空" if setup_tone == "down" else "分歧中"), setup_tone, help_text="将当前资金结构压缩成一个方向判断，方便快速扫一眼。"),
+                _build_insight_item("AI结论", "筹码结构改善" if setup_tone == "up" else ("空头压力偏高" if setup_tone == "down" else "多空分歧扩大"), setup_tone, help_text="结合机构、空头和价格强弱后生成的一句结论。"),
+            ],
+        },
+    ]
+
+    result = {
+        "ok": True,
+        "symbol": symbol,
+        "title": "机构与空头",
+        "updated": datetime.now(JST).strftime("%H:%M"),
+        "coverage": {
+            "has_institutional": inst_pct is not None,
+            "has_short_interest": short_pct is not None or short_ratio is not None,
+            "data_quality": "high" if inst_holders is not None and (short_pct is not None or short_ratio is not None) else ("medium" if inst_holders is not None or short_pct is not None or short_ratio is not None else "low"),
+        },
+        "cards": cards,
+    }
+    NEWS_CACHE[cache_key] = {"ts": now, "data": result}
+    return result
+
+
+def fetch_stock_insights(symbol):
+    symbol = (symbol or "").strip().upper()
+    if not symbol:
+        return {"ok": False, "error": "missing symbol"}
+
+    cache_key = f"insights_{symbol}"
+    now = time.time()
+    if cache_key in NEWS_CACHE and now - NEWS_CACHE[cache_key]["ts"] < INSIGHTS_CACHE_TTL:
+        return NEWS_CACHE[cache_key]["data"]
+
+    chart = build_chart_history(symbol, interval="D")
+    if not chart.get("ok"):
+        return chart
+
+    quote = fetch_quote(symbol)
+    info = {}
+    try:
+        info = yf.Ticker(symbol).info or {}
+    except Exception:
+        info = {}
+
+    closes = chart.get("closes") or []
+    if len(closes) < 20:
+        return {"ok": False, "error": "not enough history"}
+
+    price = _safe_float(chart.get("price")) or _safe_float(quote.get("price"))
+    ma5 = (chart.get("ma5") or [None])[-1]
+    ma20 = (chart.get("ma20") or [None])[-1]
+    rsi14 = _safe_float(chart.get("rsi14"))
+    change_pct = _safe_float(chart.get("change_pct"))
+    volume_ratio = _safe_float(chart.get("volume_ratio"))
+    recent_window = closes[-60:] if len(closes) >= 60 else closes
+    recent_high = max(recent_window) if recent_window else None
+    recent_low = min(recent_window) if recent_window else None
+    recent_high_20 = max(closes[-20:]) if len(closes) >= 20 else None
+    recent_low_20 = min(closes[-20:]) if len(closes) >= 20 else None
+    trailing_20_return = None
+    if len(closes) >= 21 and closes[-21]:
+        trailing_20_return = round((closes[-1] / closes[-21] - 1) * 100, 2)
+
+    benchmark_symbol = "^N225" if symbol.endswith(".T") else "^GSPC"
+    benchmark_hist = fetch_history(benchmark_symbol, period="3mo", interval="1d")
+    benchmark_return = None
+    try:
+        benchmark_closes = [
+            _safe_float(v) for v in benchmark_hist["Close"].tolist()
+            if _safe_float(v) is not None
+        ]
+        if len(benchmark_closes) >= 21 and benchmark_closes[-21]:
+            benchmark_return = round((benchmark_closes[-1] / benchmark_closes[-21] - 1) * 100, 2)
+    except Exception:
+        benchmark_return = None
+
+    daily_returns = []
+    for idx in range(1, len(closes)):
+        prev_close = closes[idx - 1]
+        if prev_close:
+            daily_returns.append((closes[idx] - prev_close) / prev_close)
+    volatility_pct = None
+    if len(daily_returns) >= 10:
+        mean_ret = sum(daily_returns[-20:]) / min(len(daily_returns), 20)
+        variance = sum((item - mean_ret) ** 2 for item in daily_returns[-20:]) / min(len(daily_returns), 20)
+        volatility_pct = round((variance ** 0.5) * (252 ** 0.5) * 100, 1)
+
+    earnings_growth = _pick_info_number(info, "earningsGrowth")
+    revenue_growth = _pick_info_number(info, "revenueGrowth")
+    forward_eps = _pick_info_number(info, "forwardEps")
+    trailing_eps = _pick_info_number(info, "trailingEps")
+    forward_pe = _pick_info_number(info, "forwardPE")
+    trailing_pe = _pick_info_number(info, "trailingPE")
+    price_to_book = _pick_info_number(info, "priceToBook")
+    target_mean_price = _pick_info_number(info, "targetMeanPrice", "targetMedianPrice")
+    target_low_price = _pick_info_number(info, "targetLowPrice")
+    target_high_price = _pick_info_number(info, "targetHighPrice")
+    analyst_count = _pick_info_number(info, "numberOfAnalystOpinions")
+
+    trend_label, trend_tone = _describe_trend(price, ma5, ma20, rsi14)
+    signal_label, signal_tone = _describe_daily_signal(change_pct, volume_ratio, price, ma20, recent_high_20, recent_low_20)
+    rs_label, rs_tone, rs_diff = _describe_relative_strength(trailing_20_return, benchmark_return)
+    risk_label, risk_tone = _describe_risk(rsi14, volatility_pct)
+    zone_label, zone_tone, zone_ratio = _describe_zone(price, recent_low, recent_high)
+    analyst_label, analyst_tone, analyst_meta = _describe_analyst_rating(info)
+    valuation_label, valuation_tone = _describe_valuation_band(price, forward_pe, trailing_pe, price_to_book)
+
+    upside_pct = None
+    if price and target_mean_price:
+        upside_pct = round((target_mean_price / price - 1) * 100, 1)
+
+    theoretical_price = None
+    if target_mean_price is not None and price is not None:
+        theoretical_price = round((target_mean_price + price) / 2, 2)
+    elif forward_eps is not None and forward_pe is not None:
+        theoretical_price = round(forward_eps * forward_pe, 2)
+    elif trailing_eps is not None and trailing_pe is not None:
+        theoretical_price = round(trailing_eps * trailing_pe, 2)
+    elif recent_high is not None and recent_low is not None:
+        theoretical_price = round((recent_high + recent_low) / 2, 2)
+
+    groups = [
+        {
+            "key": "growth",
+            "title": "盈利预期",
+            "subtitle": "指引、盈利增速与一致预期",
+            "items": [
+                _build_insight_item("公司指引", _format_growth_label(revenue_growth), _change_tone(revenue_growth), help_text="公司管理层对未来营收或业务走势给出的展望。"),
+                _build_insight_item("一致预期", _format_growth_label(earnings_growth), _change_tone(earnings_growth), help_text="卖方分析师对公司未来盈利增速的平均预期。"),
+                _build_insight_item("EPS增速", _format_growth_label(earnings_growth), _change_tone(earnings_growth), help_text="每股收益的预期增长速度，用来衡量盈利弹性。"),
+                _build_insight_item("指引差异", _describe_guidance_alignment(earnings_growth, revenue_growth), "neutral", help_text="比较公司口径和市场一致预期是否存在明显偏差。"),
+            ],
+        },
+        {
+            "key": "trend",
+            "title": "交易结构",
+            "subtitle": "趋势、强弱与风险温度",
+            "items": [
+                _build_insight_item("趋势状态", trend_label, trend_tone, help_text="结合价格、均线和 RSI 后判断当前趋势所处的阶段。"),
+                _build_insight_item("当日触发", signal_label, signal_tone, help_text="根据当日涨跌、成交量和关键价位给出的短线触发信号。"),
+                _build_insight_item("相对强度", rs_label, rs_tone, f"20日超额 {rs_diff:+.1f}%" if rs_diff is not None else "", help_text="比较个股最近表现和大盘基准，判断是否跑赢市场。"),
+                _build_insight_item("风险温度", risk_label, risk_tone, f"RSI {rsi14:.1f} / 波动 {volatility_pct:.1f}%" if rsi14 is not None and volatility_pct is not None else "", help_text="把 RSI 和波动率合并成一个风险分层，帮助判断追高或抄底风险。"),
+                _build_insight_item("区间定位", zone_label, zone_tone, f"近60日区间 {zone_ratio:.0f}%" if zone_ratio is not None else "", help_text="看当前价格处在近 60 个交易日区间的高位还是低位。"),
+            ],
+        },
+        {
+            "key": "valuation",
+            "title": "估值锚点",
+            "subtitle": "卖方评级、目标价与估值带",
+            "items": [
+                _build_insight_item("卖方评级", analyst_label, analyst_tone, analyst_meta, help_text="汇总卖方分析师当前评级，用来看主流机构对这只股票的态度。"),
+                _build_insight_item("一致目标价", f"{target_mean_price:.2f}" if target_mean_price is not None else "暂无覆盖", _change_tone(upside_pct), f"区间 {target_low_price:.2f}-{target_high_price:.2f}" if target_low_price is not None and target_high_price is not None else "", help_text="分析师目标价的平均值，常用来观察当前价格和预期空间的距离。"),
+                _build_insight_item("目标偏离", f"{upside_pct:+.1f}%" if upside_pct is not None else "暂无覆盖", _change_tone(upside_pct), help_text="当前股价距离一致目标价还有多大上行或下行空间。"),
+                _build_insight_item("估值锚", f"{theoretical_price:.2f}" if theoretical_price is not None else "暂无估算", valuation_tone, valuation_label, help_text="基于目标价、PE 或价格区间推导出的参考估值中枢。"),
+            ],
+        },
+    ]
+
+    result = {
+        "ok": True,
+        "symbol": symbol,
+        "name": chart.get("name") or resolve_stock_name(symbol, symbol),
+        "updated": datetime.now(JST).strftime("%H:%M"),
+        "coverage": {
+            "analyst_count": int(analyst_count) if analyst_count else 0,
+            "has_targets": target_mean_price is not None,
+            "has_growth": earnings_growth is not None or revenue_growth is not None,
+        },
+        "groups": groups,
+    }
+    NEWS_CACHE[cache_key] = {"ts": now, "data": result}
+    return result
 
 
 def build_chart_history(symbol, interval="D"):
@@ -2721,7 +3580,7 @@ def chart_history_api():
     interval = request.args.get("interval", "D").strip().upper() or "D"
     if not symbol:
         return jsonify({"ok": False, "error": "missing symbol"}), 400
-    return jsonify(build_chart_history(symbol, interval=interval))
+    return jsonify(_json_safe(build_chart_history(symbol, interval=interval)))
 
 
 @app.route("/api/quotes")
@@ -2806,6 +3665,22 @@ def stock_news():
     if not symbol:
         return jsonify([])
     return jsonify(fetch_stock_news(symbol))
+
+
+@app.route("/api/stock_insights")
+def stock_insights():
+    symbol = request.args.get("symbol", "").strip()
+    if not symbol:
+        return jsonify({"ok": False, "error": "missing symbol"}), 400
+    return jsonify(fetch_stock_insights(symbol))
+
+
+@app.route("/api/ownership_short")
+def ownership_short():
+    symbol = request.args.get("symbol", "").strip()
+    if not symbol:
+        return jsonify({"ok": False, "error": "missing symbol"}), 400
+    return jsonify(fetch_ownership_short(symbol))
 
 
 @app.route("/api/trump_news")

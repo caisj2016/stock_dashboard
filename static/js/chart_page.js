@@ -9,6 +9,7 @@ const ChartPageState = {
   showMacd: true,
   measureStart: null,
   resizeObserver: null,
+  theme: 'dark',
 };
 
 const DRAWING_TOOLS = {
@@ -78,18 +79,55 @@ function getChartPageDom() {
     intervalButtons: Array.from(document.querySelectorAll('[data-chart-page-interval]')),
     subpaneButtons: Array.from(document.querySelectorAll('[data-subpane-toggle]')),
     clearButton: document.getElementById('chartClearDrawingsBtn'),
+    themeToggleBtn: document.getElementById('chartThemeToggleBtn'),
+    insightsBody: document.getElementById('chartInsightsBody'),
+    insightsFetch: document.getElementById('chartInsightsFetch'),
+    insightsRefreshBtn: document.getElementById('chartInsightsRefreshBtn'),
+    ownershipBody: document.getElementById('chartOwnershipBody'),
+    ownershipFetch: document.getElementById('chartOwnershipFetch'),
+    ownershipRefreshBtn: document.getElementById('chartOwnershipRefreshBtn'),
     newsBody: document.getElementById('chartNewsBody'),
     newsFetch: document.getElementById('chartNewsFetch'),
     newsRefreshBtn: document.getElementById('chartNewsRefreshBtn'),
   };
 }
 
+function pageFmtPlain(value, digits = 2) {
+  if (value == null || Number.isNaN(Number(value))) return '--';
+  return Number(value).toLocaleString('ja-JP', { maximumFractionDigits: digits });
+}
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function isDisplayEmptyValue(rawValue) {
+  const value = String(rawValue ?? '').trim();
+  return !value || value === '--' || value === 'None' || value.startsWith('暂无');
+}
+
+function renderMetricHelp(helpText) {
+  if (!helpText) return '';
+  const safeText = escapeHtml(helpText);
+  return `<span class="metric-help" tabindex="0" aria-label="${safeText}" data-tooltip="${safeText}">?</span>`;
+}
+
+function renderMetricLabel(label, helpText, className) {
+  return `<div class="${className}"><span>${escapeHtml(label || '--')}</span>${renderMetricHelp(helpText)}</div>`;
+}
+
 function getChartPageStyles() {
+  const isLight = ChartPageState.theme === 'light';
   return {
     grid: {
       show: true,
-      horizontal: { show: true, color: 'rgba(148,163,184,0.10)', style: 'dashed', dashedValue: [3, 3] },
-      vertical: { show: true, color: 'rgba(148,163,184,0.08)', style: 'dashed', dashedValue: [3, 3] },
+      horizontal: { show: true, color: isLight ? 'rgba(148,163,184,0.18)' : 'rgba(148,163,184,0.10)', style: 'dashed', dashedValue: [3, 3] },
+      vertical: { show: true, color: isLight ? 'rgba(148,163,184,0.14)' : 'rgba(148,163,184,0.08)', style: 'dashed', dashedValue: [3, 3] },
     },
     candle: {
       type: 'candle_solid',
@@ -107,7 +145,7 @@ function getChartPageStyles() {
       tooltip: { showRule: 'none', showType: 'rect' },
       priceMark: {
         last: {
-          line: { show: true, style: 'dashed', dashedValue: [4, 4], size: 1 },
+          line: { show: true, style: 'dashed', dashedValue: [4, 4], size: 1, color: isLight ? 'rgba(71,85,105,0.7)' : undefined },
         },
       },
     },
@@ -132,32 +170,51 @@ function getChartPageStyles() {
       },
     },
     xAxis: {
-      axisLine: { color: 'rgba(148,163,184,0.18)' },
-      tickText: { color: '#94a3b8' },
+      axisLine: { color: isLight ? 'rgba(148,163,184,0.28)' : 'rgba(148,163,184,0.18)' },
+      tickText: { color: isLight ? '#6b7280' : '#94a3b8' },
     },
     yAxis: {
-      axisLine: { color: 'rgba(148,163,184,0.18)' },
-      tickText: { color: '#cbd5e1' },
-      tickLine: { color: 'rgba(148,163,184,0.08)' },
+      axisLine: { color: isLight ? 'rgba(148,163,184,0.28)' : 'rgba(148,163,184,0.18)' },
+      tickText: { color: isLight ? '#334155' : '#cbd5e1' },
+      tickLine: { color: isLight ? 'rgba(148,163,184,0.12)' : 'rgba(148,163,184,0.08)' },
     },
     separator: {
-      color: 'rgba(148,163,184,0.14)',
+      color: isLight ? 'rgba(148,163,184,0.2)' : 'rgba(148,163,184,0.14)',
       size: 1,
       fill: true,
-      activeBackgroundColor: 'rgba(99,102,241,0.12)',
+      activeBackgroundColor: isLight ? 'rgba(180,138,92,0.12)' : 'rgba(99,102,241,0.12)',
     },
     crosshair: {
       show: true,
       horizontal: {
-        line: { color: 'rgba(148,163,184,0.32)', style: 'dashed', dashedValue: [4, 4] },
-        text: { color: '#0b1220', backgroundColor: '#e2e8f0' },
+        line: { color: isLight ? 'rgba(100,116,139,0.4)' : 'rgba(148,163,184,0.32)', style: 'dashed', dashedValue: [4, 4] },
+        text: { color: isLight ? '#3f2f24' : '#0b1220', backgroundColor: isLight ? '#f6ead8' : '#e2e8f0' },
       },
       vertical: {
-        line: { color: 'rgba(148,163,184,0.32)', style: 'dashed', dashedValue: [4, 4] },
-        text: { color: '#0b1220', backgroundColor: '#e2e8f0' },
+        line: { color: isLight ? 'rgba(100,116,139,0.4)' : 'rgba(148,163,184,0.32)', style: 'dashed', dashedValue: [4, 4] },
+        text: { color: isLight ? '#3f2f24' : '#0b1220', backgroundColor: isLight ? '#f6ead8' : '#e2e8f0' },
       },
     },
   };
+}
+
+function applyChartTheme(theme) {
+  ChartPageState.theme = theme === 'light' ? 'light' : 'dark';
+  document.documentElement.dataset.theme = ChartPageState.theme;
+  document.body.dataset.theme = ChartPageState.theme;
+  try {
+    window.localStorage.setItem('chart-page-theme', ChartPageState.theme);
+  } catch (_) {}
+  getChartPageDom().themeToggleBtn?.setAttribute('aria-pressed', ChartPageState.theme === 'light' ? 'true' : 'false');
+  rebuildChartForLayoutChange();
+}
+
+function initChartTheme() {
+  let nextTheme = document.body.dataset.theme || 'dark';
+  try {
+    nextTheme = window.localStorage.getItem('chart-page-theme') || nextTheme;
+  } catch (_) {}
+  applyChartTheme(nextTheme);
 }
 
 function buildChartLayout() {
@@ -470,7 +527,108 @@ function bindChartPageToolbar() {
 
   dom.clearButton?.addEventListener('click', clearDrawings);
   dom.root?.addEventListener('click', handleMeasureClick);
+  dom.themeToggleBtn?.addEventListener('click', () => {
+    applyChartTheme(ChartPageState.theme === 'light' ? 'dark' : 'light');
+  });
+  dom.insightsRefreshBtn?.addEventListener('click', () => loadChartInsights(ChartPageState.symbol));
+  dom.ownershipRefreshBtn?.addEventListener('click', () => loadOwnershipShort(ChartPageState.symbol));
   dom.newsRefreshBtn?.addEventListener('click', () => loadChartNews(ChartPageState.symbol));
+}
+
+function renderOwnershipShort(payload) {
+  const dom = getChartPageDom();
+  if (!dom.ownershipBody) return;
+  if (!payload?.ok || !Array.isArray(payload.cards) || !payload.cards.length) {
+    dom.ownershipBody.innerHTML = `<div class="empty-note">${escapeHtml(payload?.error || '机构与空头暂不可用')}</div>`;
+    return;
+  }
+  dom.ownershipBody.innerHTML = payload.cards.map(card => `
+    <article class="chart-ownership-item">
+      <div class="chart-ownership-head">
+        <div class="chart-ownership-title">${card.title || '--'}</div>
+        ${card.subtitle ? `<div class="chart-ownership-subtitle">${card.subtitle}</div>` : ''}
+      </div>
+      <div class="chart-ownership-list">
+        ${(card.items || []).map(item => {
+          const rawValue = String(item?.value ?? '--').trim();
+          const isEmptyValue = isDisplayEmptyValue(rawValue);
+          return `
+            <div class="chart-ownership-row">
+              ${renderMetricLabel(item.label, item.help, 'chart-ownership-label')}
+              <div class="chart-ownership-value ${item.tone || 'neutral'}${isEmptyValue ? ' empty' : ''}">${escapeHtml(item.value || '--')}</div>
+              ${item.detail ? `<div class="chart-ownership-detail">${escapeHtml(item.detail)}</div>` : ''}
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </article>
+  `).join('');
+}
+
+async function loadOwnershipShort(symbol) {
+  const dom = getChartPageDom();
+  if (!symbol || !dom.ownershipBody) return;
+  dom.ownershipFetch.textContent = '机构与空头加载中...';
+  dom.ownershipBody.innerHTML = '<div class="empty-note">正在加载机构与空头...</div>';
+  try {
+    const payload = await fetchJson(`/api/ownership_short?symbol=${encodeURIComponent(symbol)}`);
+    renderOwnershipShort(payload);
+    dom.ownershipFetch.textContent = payload?.updated ? `更新 ${payload.updated}` : `更新 ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`;
+  } catch (error) {
+    dom.ownershipBody.innerHTML = `<div class="empty-note">${error.message || '机构与空头加载失败'}</div>`;
+    dom.ownershipFetch.textContent = '机构与空头不可用';
+  }
+}
+
+function renderChartInsights(payload) {
+  const dom = getChartPageDom();
+  if (!dom.insightsBody) return;
+  if (!payload?.ok || !Array.isArray(payload.groups) || !payload.groups.length) {
+    dom.insightsBody.innerHTML = `<div class="empty-note">${escapeHtml(payload?.error || '参考信息暂时不可用')}</div>`;
+    return;
+  }
+  dom.insightsBody.innerHTML = payload.groups.map(group => `
+    <article class="chart-insight-card">
+      <div class="chart-insight-card-head">
+        <div>
+          <div class="chart-insight-title">${group.title || '--'}</div>
+          <div class="chart-insight-subtitle">${group.subtitle || ''}</div>
+        </div>
+      </div>
+      <div class="chart-insight-list">
+        ${(group.items || []).map(item => {
+          const rawValue = String(item?.value ?? '--').trim();
+          const isEmptyValue = isDisplayEmptyValue(rawValue);
+          const valueClass = `chart-insight-value ${item.tone || 'neutral'}${isEmptyValue ? ' empty' : ''}`;
+          return `
+          <div class="chart-insight-item">
+            ${renderMetricLabel(item.label, item.help, 'chart-insight-label')}
+            <div class="chart-insight-value-row">
+              <div class="${valueClass}">${escapeHtml(item.value || '--')}</div>
+              ${item.numeric != null ? `<div class="chart-insight-numeric">${pageFmtPlain(item.numeric)}</div>` : ''}
+            </div>
+            ${item.detail ? `<div class="chart-insight-detail">${escapeHtml(item.detail)}</div>` : ''}
+          </div>
+        `;
+        }).join('')}
+      </div>
+    </article>
+  `).join('');
+}
+
+async function loadChartInsights(symbol) {
+  const dom = getChartPageDom();
+  if (!symbol || !dom.insightsBody) return;
+  dom.insightsFetch.textContent = '研究面板加载中...';
+  dom.insightsBody.innerHTML = '<div class="empty-note">正在加载研究面板...</div>';
+  try {
+    const payload = await fetchJson(`/api/stock_insights?symbol=${encodeURIComponent(symbol)}`);
+    renderChartInsights(payload);
+    dom.insightsFetch.textContent = payload?.updated ? `更新 ${payload.updated}` : `更新 ${new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`;
+  } catch (error) {
+    dom.insightsBody.innerHTML = `<div class="empty-note">${error.message || '研究面板加载失败'}</div>`;
+    dom.insightsFetch.textContent = '研究面板不可用';
+  }
 }
 
 function renderChartNewsItems(items) {
@@ -558,6 +716,8 @@ async function openChartSymbol(symbol, name) {
   const nextUrl = `/chart?symbol=${encodeURIComponent(nextSymbol)}&name=${encodeURIComponent(ChartPageState.name)}`;
   window.history.replaceState({}, '', nextUrl);
   await renderChartPage();
+  await loadChartInsights(nextSymbol);
+  await loadOwnershipShort(nextSymbol);
   await loadChartNews(nextSymbol);
 }
 
@@ -604,8 +764,11 @@ function bindChartResizeObservers() {
 function initChartPage() {
   ChartPageState.symbol = document.body.dataset.chartSymbol || '';
   ChartPageState.name = document.body.dataset.chartName || '';
+  initChartTheme();
   bindChartPageToolbar();
   renderChartPage();
+  loadChartInsights(ChartPageState.symbol);
+  loadOwnershipShort(ChartPageState.symbol);
   loadChartNews(ChartPageState.symbol);
   bindChartResizeObservers();
   window.addEventListener('resize', triggerChartResizeBurst);
