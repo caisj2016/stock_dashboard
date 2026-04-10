@@ -1,0 +1,15 @@
+<div class="header" th:fragment="header">
+  <div>
+    <div class="logo">股票看板<span>Dashboard</span></div>
+    <th:block th:replace="~{partials/nav_links :: navLinks}"></th:block>
+  </div>
+  <div class="header-actions">
+    <button class="theme-toggle-btn" type="button" data-global-theme-toggle aria-label="Toggle theme">
+      <span class="theme-toggle-track">
+        <span class="theme-toggle-label theme-toggle-label-dark">N</span>
+        <span class="theme-toggle-thumb"></span>
+        <span class="theme-toggle-label theme-toggle-label-light">D</span>
+      </span>
+    </button>
+  </div>
+</div>

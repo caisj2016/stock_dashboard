@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>股票看板</title>
+<script>
+(() => {
+  try {
+    const theme = localStorage.getItem('global-theme') || 'dark';
+    document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+  } catch (_) {
+    document.documentElement.dataset.theme = 'dark';
+  }
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body th:attr="data-api-base=${apiBase}">
+<div class="app-shell has-shared-watchlist">
+  <div class="app">
+    <th:block th:replace="~{partials/header :: header}"></th:block>
+    <th:block th:replace="~{partials/market_strip}"></th:block>
+    <th:block th:replace="~{partials/summary}"></th:block>
+    <div class="grid" id="grid"></div>
+    <th:block th:replace="~{partials/news_panels}"></th:block>
+    <th:block th:replace="~{partials/digest_panels}"></th:block>
+    <div class="footer">
+      数据主要来自 Yahoo Finance。行情与资讯都会按页面节奏自动刷新。
+    </div>
+  </div>
+
+  <th:block th:replace="~{partials/watchlist}"></th:block>
+</div>
+
+<th:block th:replace="~{partials/modal}"></th:block>
+<th:block th:replace="~{partials/chart_modal}"></th:block>
+
+<script src="/js/utils.js"></script>
+<script src="/js/chart.js"></script>
+<script src="/js/watchlist.js"></script>
+<script src="/js/news.js"></script>
+<script src="/js/digest.js"></script>
+<script src="/js/portfolio.js"></script>
+<script src="/js/app.js"></script>
+</body>
+</html>

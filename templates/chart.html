@@ -7,7 +7,7 @@
 <script>
 (() => {
   try {
-    const theme = localStorage.getItem('chart-page-theme') || localStorage.getItem('global-theme') || 'dark';
+    const theme = localStorage.getItem('global-theme') || 'dark';
     document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
   } catch (_) {
     document.documentElement.dataset.theme = 'dark';
@@ -17,7 +17,7 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
-<body data-chart-symbol="{{ symbol or '' }}" data-chart-name="{{ name or '' }}">
+<body data-api-base="{{ api_base or '' }}" data-chart-symbol="{{ symbol or '' }}" data-chart-name="{{ name or '' }}">
 <div class="app-shell has-shared-watchlist chart-shell">
   <div class="app chart-page-app">
     <div class="header chart-header">
@@ -28,10 +28,11 @@
         <div class="nav-pills">
           <a class="page-link" href="/">主页</a>
           <a class="page-link" href="/screener">技术选股</a>
+          <a class="page-link" href="/short-interest?symbol={{ symbol or '6758.T' }}{% if name %}&name={{ name|urlencode }}{% endif %}">空头信息</a>
         </div>
       </div>
       <div class="chart-header-actions">
-        <button class="theme-toggle-btn" type="button" id="chartThemeToggleBtn" aria-label="Toggle theme">
+        <button class="theme-toggle-btn" type="button" id="chartThemeToggleBtn" data-global-theme-toggle aria-label="Toggle theme">
           <span class="theme-toggle-track">
             <span class="theme-toggle-label theme-toggle-label-dark">N</span>
             <span class="theme-toggle-thumb"></span>
@@ -91,6 +92,21 @@
       <div class="chart-fallback" id="chartFallback" style="display:none">
         图表数据暂时不可用，请稍后再试。
       </div>
+    </section>
+
+    <section class="chart-company-profile" id="chartCompanyProfile">
+      <div class="chart-company-tags">
+        <span class="chart-company-tag">行业 <strong id="chartSectorTag">--</strong></span>
+        <span class="chart-company-tag">赛道 <strong id="chartTrackTag">--</strong></span>
+      </div>
+      <article class="chart-company-card">
+        <div class="chart-company-label">业务内容 <span class="metric-help" tabindex="0" aria-label="公司主要做什么业务，用来快速了解收入来源和能力边界。" data-tooltip="公司主要做什么业务，用来快速了解收入来源和能力边界。">?</span></div>
+        <div class="chart-company-text" id="chartBusinessContent">正在加载公司业务简介...</div>
+      </article>
+      <article class="chart-company-card">
+        <div class="chart-company-label">产品内容 <span class="metric-help" tabindex="0" aria-label="公司主要卖什么产品或提供什么服务，用来快速判断业务抓手。" data-tooltip="公司主要卖什么产品或提供什么服务，用来快速判断业务抓手。">?</span></div>
+        <div class="chart-company-text" id="chartProductContent">正在加载核心产品信息...</div>
+      </article>
     </section>
 
     <section class="chart-insights-card">

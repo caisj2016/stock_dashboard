@@ -21,7 +21,7 @@ async function loadTopicDigest(topic, options = {}) {
   btn.disabled = true;
   body.innerHTML = `<div class="ai-loading"><div class="ai-spinner"></div>正在整理${cfg.label}摘要...</div>`;
   try {
-    const data = (!options.force && DigestState.cache[topic]) || await fetchJson(`/api/topic_digest?topic=${encodeURIComponent(topic)}`);
+    const data = (!options.force && DigestState.cache[topic]) || await fetchApiJson(`/api/topic_digest?topic=${encodeURIComponent(topic)}${options.force ? '&force=1' : ''}`);
     DigestState.cache[topic] = data;
     body.innerHTML = renderTopicDigest(data);
     if (data.updated) fetchEl.textContent = `更新: ${data.updated}`;

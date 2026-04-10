@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KLineChart 单体测试</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+JP:wght@300;400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" th:href="@{/css/app.css}">
+</head>
+<body th:attr="data-api-base=${apiBase}">
+<div class="app-shell chart-shell">
+  <div class="app">
+    <div class="header chart-header">
+      <div class="brand-wrap">
+        <div class="brand">
+          <div class="brand-title">KLineChart 单体测试</div>
+          <div class="brand-sub">Smoke Test</div>
+        </div>
+        <div class="nav-pills">
+          <a class="page-link" href="/">主页面</a>
+          <a class="page-link" href="/chart?symbol=6758.T&name=Sony">正式图表页</a>
+        </div>
+      </div>
+    </div>
+
+    <section class="chart-card chart-card-kline">
+      <div class="chart-draw-status" id="smokeStatus">正在加载 KLineChart 库...</div>
+      <div class="klinechart-host-wrap">
+        <div id="smokeChartContainer" class="klinechart-host"></div>
+      </div>
+      <div class="chart-fallback" id="smokeFallback" style="display:none"></div>
+    </section>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/klinecharts@9.8.12/dist/umd/klinecharts.min.js"></script>
+<script>
+const statusEl = document.getElementById('smokeStatus');
+const fallbackEl = document.getElementById('smokeFallback');
+const sampleData = [
+  { timestamp: 1711929600000, open: 100, high: 108, low: 96, close: 104, volume: 120000 },
+  { timestamp: 1712016000000, open: 104, high: 112, low: 103, close: 110, volume: 180000 },
+  { timestamp: 1712102400000, open: 110, high: 114, low: 106, close: 108, volume: 160000 },
+  { timestamp: 1712188800000, open: 108, high: 116, low: 107, close: 115, volume: 220000 },
+  { timestamp: 1712275200000, open: 115, high: 119, low: 111, close: 113, volume: 175000 },
+];
+
+function showSmokeError(message) {
+  fallbackEl.style.display = 'block';
+  fallbackEl.textContent = message;
+  statusEl.textContent = message;
+}
+
+window.addEventListener('DOMContentLoaded', () => {
+  if (!window.klinecharts || typeof window.klinecharts.init !== 'function') {
+    showSmokeError('库未加载成功：window.klinecharts.init 不存在');
+    return;
+  }
+
+  try {
+    const chart = window.klinecharts.init('smokeChartContainer', {
+      locale: 'zh-CN',
+      timezone: 'Asia/Tokyo',
+      layout: [
+        { type: 'candle', content: ['MA'] },
+        { type: 'indicator', content: ['VOL'], options: { height: 120 } },
+        { type: 'indicator', content: ['MACD'], options: { height: 140 } },
+        { type: 'xAxis' },
+      ],
+    });
+
+    if (typeof chart.applyNewData === 'function') {
+      chart.applyNewData(sampleData);
+    } else if (typeof chart.setData === 'function') {
+      chart.setData(sampleData);
+    } else {
+      showSmokeError('实例已创建，但没有 applyNewData / setData');
+      return;
+    }
+
+    statusEl.textContent = '单体测试成功：库已加载，假数据图表已渲染。';
+  } catch (error) {
+    showSmokeError('单体测试失败：' + (error && error.message ? error.message : error));
+  }
+});
+</script>
+</body>
+</html>

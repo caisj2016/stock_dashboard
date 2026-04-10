@@ -1,0 +1,139 @@
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{ name or symbol or '空头信息' }} - 空头信息</title>
+<script>
+(() => {
+  try {
+    const theme = localStorage.getItem('global-theme') || 'dark';
+    document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+  } catch (_) {
+    document.documentElement.dataset.theme = 'dark';
+  }
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body data-api-base="{{ api_base or '' }}" data-short-symbol="{{ symbol or '' }}" data-short-name="{{ name or '' }}">
+<div class="app-shell has-shared-watchlist chart-shell">
+  <div class="app chart-page-app short-interest-page">
+    <div class="header chart-header">
+      <div class="brand-wrap">
+        <div class="brand">
+          <div class="brand-title">空头信息</div>
+        </div>
+        <div class="nav-pills">
+          <a class="page-link" href="/">主页</a>
+          <a class="page-link" href="/screener">技术选股</a>
+          <a class="page-link active" href="/short-interest?symbol={{ symbol or '6758.T' }}{% if name %}&name={{ name|urlencode }}{% endif %}">空头信息</a>
+        </div>
+      </div>
+      <div class="chart-header-actions">
+        <button class="theme-toggle-btn" type="button" id="shortThemeToggleBtn" data-global-theme-toggle aria-label="Toggle theme">
+          <span class="theme-toggle-track">
+            <span class="theme-toggle-label theme-toggle-label-dark">N</span>
+            <span class="theme-toggle-thumb"></span>
+            <span class="theme-toggle-label theme-toggle-label-light">D</span>
+          </span>
+        </button>
+      </div>
+    </div>
+
+    <section class="chart-topbar">
+      <div class="chart-topbar-main">
+        <div class="chart-symbol" id="shortPageSymbol">{{ symbol or '6758.T' }}</div>
+        <div class="chart-name" id="shortPageName">{{ name or '空头信息页' }}</div>
+      </div>
+      <div class="chart-topbar-side short-page-actions">
+        <input class="short-page-input" id="shortSymbolInput" value="{{ symbol or '6758.T' }}" placeholder="输入代码，例如 7711.T">
+        <button class="short-page-btn short-page-btn-primary" type="button" id="shortLoadBtn">查看</button>
+        <a class="short-page-link" id="shortChartLink" href="/chart?symbol={{ symbol or '6758.T' }}{% if name %}&name={{ name|urlencode }}{% endif %}">图表页</a>
+      </div>
+    </section>
+
+    <section class="chart-ownership-card">
+      <div class="chart-news-head">
+        <div class="ai-card-title">
+          <span class="ai-icon">OS</span>
+          <span>空头卡片</span>
+        </div>
+        <div class="chart-news-actions">
+          <span class="ai-last-fetch" id="shortOwnershipFetch"></span>
+          <button class="btn-refresh" type="button" id="shortOwnershipRefreshBtn">刷新</button>
+        </div>
+      </div>
+      <div class="chart-ownership-grid" id="shortOwnershipBody">
+        <div class="empty-note">正在加载空头信息...</div>
+      </div>
+    </section>
+
+    <section class="chart-insights-card short-debug-card">
+      <div class="chart-news-head">
+        <div class="ai-card-title">
+          <span class="ai-icon">D</span>
+          <span>调试结论</span>
+        </div>
+        <div class="chart-news-actions">
+          <span class="ai-last-fetch" id="shortDebugFetch"></span>
+          <button class="btn-refresh" type="button" id="shortDebugRefreshBtn">刷新</button>
+        </div>
+      </div>
+      <div class="short-debug-status" id="shortDebugStatus">等待加载...</div>
+      <div class="short-debug-grid">
+        <article class="chart-ownership-item">
+          <div class="chart-ownership-head">
+            <div class="chart-ownership-title">核心判断</div>
+            <div class="chart-ownership-subtitle">帮助区分“抓不到”与“网站当日就是 0”</div>
+          </div>
+          <div class="chart-ownership-list" id="shortDebugSummary"></div>
+        </article>
+        <article class="chart-ownership-item">
+          <div class="chart-ownership-head">
+            <div class="chart-ownership-title">最新原始行</div>
+            <div class="chart-ownership-subtitle">直接来自参考网站表格的最新行</div>
+          </div>
+          <div class="short-raw-table" id="shortLatestRows"></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="chart-news-card short-history-card">
+      <div class="chart-news-head">
+        <div class="ai-card-title">
+          <span class="ai-icon">R</span>
+          <span>最近原始历史</span>
+        </div>
+      </div>
+      <div class="short-history-wrap">
+        <div class="short-history-block">
+          <div class="chart-ownership-title">总览页最近几行</div>
+          <div class="short-raw-table" id="shortOverviewRecent"></div>
+        </div>
+        <div class="short-history-block">
+          <div class="chart-ownership-title">空卖明细最近几行</div>
+          <div class="short-raw-table" id="shortDetailRecent"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="chart-news-card short-json-card">
+      <div class="chart-news-head">
+        <div class="ai-card-title">
+          <span class="ai-icon">J</span>
+          <span>Debug JSON</span>
+        </div>
+      </div>
+      <pre class="short-json-pre" id="shortDebugJson">等待加载...</pre>
+    </section>
+  </div>
+
+  {% include "partials/watchlist.html" %}
+</div>
+
+<script src="{{ url_for('static', filename='js/utils.js') }}"></script>
+<script src="{{ url_for('static', filename='js/watchlist.js') }}"></script>
+<script src="{{ url_for('static', filename='js/short_interest_page.js') }}"></script>
+</body>
+</html>

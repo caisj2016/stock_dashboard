@@ -1,0 +1,5 @@
+<div class="page-nav" th:fragment="navLinks">
+  <a class="page-link" th:classappend="${currentPage == 'dashboard'} ? ' active'" th:href="@{/}">Home</a>
+  <a class="page-link" th:classappend="${currentPage == 'screener'} ? ' active'" th:href="@{/screener}">Screener</a>
+  <a class="page-link" th:classappend="${currentPage == 'short_interest'} ? ' active'" th:href="@{/short-interest}">Short Interest</a>
+</div>

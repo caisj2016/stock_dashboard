@@ -1,0 +1,39 @@
+server:
+  port: ${BACKEND_PORT:18080}
+
+spring:
+  application:
+    name: stock-dashboard-backend
+  jackson:
+    default-property-inclusion: non_null
+  cache:
+    cache-names:
+      - quotes
+      - indexQuotes
+      - chartHistory
+      - stockNews
+      - stockInsights
+      - topicDigest
+      - screener
+      - ownershipShort
+      - ownershipShortDebug
+      - dashboardSnapshot
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+app:
+  cors:
+    allowed-origins: ${APP_ALLOWED_ORIGINS:http://localhost:5555,http://localhost:3000}
+  portfolio:
+    file: ${APP_PORTFOLIO_FILE:../portfolio.json}
+    backup-dir: ${APP_PORTFOLIO_BACKUP_DIR:../data_backups}
+    backup-limit: ${PORTFOLIO_BACKUP_LIMIT:20}
+  migration:
+    source-python-file: ${APP_SOURCE_PYTHON_FILE:retired}
+  market-data:
+    yahoo-chart-base-url: ${APP_YAHOO_CHART_BASE_URL:https://query1.finance.yahoo.com/v8/finance/chart}
+    timeout-seconds: ${HISTORY_FETCH_TIMEOUT:12}

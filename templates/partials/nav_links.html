@@ -1,4 +1,5 @@
 <div class="page-nav">
-  <a class="page-link {% if current_page == 'dashboard' %}active{% endif %}" href="{{ url_for('index') }}">主页面</a>
-  <a class="page-link {% if current_page == 'screener' %}active{% endif %}" href="{{ url_for('screener_page') }}">技术选股</a>
+  <a class="page-link {% if current_page == 'dashboard' %}active{% endif %}" href="{{ url_for('index') }}">Home</a>
+  <a class="page-link {% if current_page == 'screener' %}active{% endif %}" href="{{ url_for('screener_page') }}">Screener</a>
+  <a class="page-link {% if current_page == 'short_interest' %}active{% endif %}" href="{{ url_for('short_interest_page') }}">Short Interest</a>
 </div>

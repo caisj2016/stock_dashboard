@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>专业图表</title>
+<script>
+(() => {
+  try {
+    const theme = localStorage.getItem('global-theme') || 'dark';
+    document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+  } catch (_) {
+    document.documentElement.dataset.theme = 'dark';
+  }
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body th:attr="data-api-base=${apiBase},data-chart-symbol=${symbol},data-chart-name=${name}">
+<div class="app-shell has-shared-watchlist chart-shell">
+  <div class="app chart-page-app">
+    <div class="header chart-header">
+      <div class="brand-wrap">
+        <div class="brand">
+          <div class="brand-title">专业图表</div>
+        </div>
+        <div class="nav-pills">
+          <a class="page-link" th:href="@{/}">首页</a>
+          <a class="page-link" th:href="@{/screener}">筛选器</a>
+          <a class="page-link" th:href="@{/short-interest(symbol=${#strings.isEmpty(symbol) ? '6758.T' : symbol},name=${name})}">空头调试</a>
+        </div>
+      </div>
+      <div class="chart-header-actions">
+        <button class="theme-toggle-btn" type="button" id="chartThemeToggleBtn" data-global-theme-toggle aria-label="Toggle theme">
+          <span class="theme-toggle-track">
+            <span class="theme-toggle-label theme-toggle-label-dark">N</span>
+            <span class="theme-toggle-thumb"></span>
+            <span class="theme-toggle-label theme-toggle-label-light">D</span>
+          </span>
+        </button>
+      </div>
+    </div>
+
+    <section class="chart-topbar">
+      <div class="chart-topbar-main">
+        <div class="chart-symbol" id="chartPageSymbol" th:text="${#strings.isEmpty(symbol) ? '未选择股票' : symbol}">未选择股票</div>
+        <div class="chart-name" id="chartPageName" th:text="${#strings.isEmpty(name) ? '专业图表' : name}">专业图表</div>
+      </div>
+      <div class="chart-topbar-side">
+        <div class="chart-hero-price" id="chartHeroPrice">--</div>
+        <div class="chart-topbar-meta">
+          <div class="chart-hero-change neutral" id="chartHeroChange">--</div>
+          <div class="chart-hero-updated" id="chartHeroUpdated"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="chart-card chart-card-kline chart-card-kline-compact">
+      <div class="chart-control-bar">
+        <div class="chart-toolbar chart-toolbar-main">
+          <button class="screen-chip active" type="button" data-chart-page-interval="D">日线</button>
+          <button class="screen-chip" type="button" data-chart-page-interval="W">周线</button>
+          <button class="screen-chip" type="button" data-chart-page-interval="M">月线</button>
+          <button class="screen-chip" type="button" data-chart-page-interval="240">4小时</button>
+        </div>
+        <div class="chart-subpane-toggle chart-subpane-toggle-right">
+          <button class="screen-chip active" type="button" data-subpane-toggle="volume">成交量</button>
+          <button class="screen-chip active" type="button" data-subpane-toggle="macd">MACD</button>
+        </div>
+      </div>
+
+      <div class="chart-tool-hint" id="chartToolHint"></div>
+
+      <div class="chart-stage">
+        <aside class="chart-side-tools">
+          <button class="tool-icon-btn active" type="button" data-draw-tool="cursor" title="游标">+</button>
+          <button class="tool-icon-btn" type="button" data-draw-tool="segment" title="线段">/</button>
+          <button class="tool-icon-btn" type="button" data-draw-tool="horizontal" title="水平线">H</button>
+          <button class="tool-icon-btn" type="button" data-draw-tool="fibonacci" title="斐波那契">F</button>
+          <button class="tool-icon-btn" type="button" data-draw-tool="price_range" title="价格区间">价</button>
+          <button class="tool-icon-btn" type="button" data-draw-tool="time_range" title="时间区间">时</button>
+          <button class="tool-icon-btn tool-icon-btn-clear" type="button" id="chartClearDrawingsBtn" title="清除">清</button>
+        </aside>
+
+        <div class="klinechart-host-wrap">
+          <div id="klineChartContainer" class="klinechart-host"></div>
+          <div id="chartMeasureLayer" class="chart-measure-layer"></div>
+        </div>
+      </div>
+
+      <div class="chart-fallback" id="chartFallback" style="display:none">图表数据暂不可用</div>
+    </section>
+
+    <section class="chart-company-profile" id="chartCompanyProfile">
+      <div class="chart-company-tags">
+        <span class="chart-company-tag">行业 <strong id="chartSectorTag">--</strong></span>
+        <span class="chart-company-tag">赛道 <strong id="chartTrackTag">--</strong></span>
+      </div>
+      <article class="chart-company-card">
+        <div class="chart-company-label">公司业务</div>
+        <div class="chart-company-text" id="chartBusinessContent">正在加载公司简介...</div>
+      </article>
+      <article class="chart-company-card">
+        <div class="chart-company-label">核心产品</div>
+        <div class="chart-company-text" id="chartProductContent">正在加载产品信息...</div>
+      </article>
+    </section>
+
+    <section class="chart-insights-card">
+      <div class="chart-news-head">
+        <div class="ai-card-title"><span class="ai-icon">AI</span><span>研究摘要</span></div>
+        <div class="chart-news-actions">
+          <span class="ai-last-fetch" id="chartInsightsFetch"></span>
+          <button class="btn-refresh" type="button" id="chartInsightsRefreshBtn">刷新摘要</button>
+        </div>
+      </div>
+      <div class="chart-insights-grid" id="chartInsightsBody"><div class="empty-note">正在加载研究摘要...</div></div>
+    </section>
+
+    <section class="chart-ownership-card">
+      <div class="chart-news-head">
+        <div class="ai-card-title"><span class="ai-icon">OS</span><span>机构与空头</span></div>
+        <div class="chart-news-actions">
+          <span class="ai-last-fetch" id="chartOwnershipFetch"></span>
+          <button class="btn-refresh" type="button" id="chartOwnershipRefreshBtn">刷新结构</button>
+        </div>
+      </div>
+      <div class="chart-ownership-grid" id="chartOwnershipBody"><div class="empty-note">正在加载机构与空头...</div></div>
+    </section>
+
+    <section class="chart-news-card">
+      <div class="chart-news-head">
+        <div class="ai-card-title"><span class="ai-icon">N</span><span>个股新闻</span></div>
+        <div class="chart-news-actions">
+          <span class="ai-last-fetch" id="chartNewsFetch"></span>
+          <button class="btn-refresh" type="button" id="chartNewsRefreshBtn">刷新新闻</button>
+        </div>
+      </div>
+      <div class="chart-news-body" id="chartNewsBody"><div class="empty-note">正在加载新闻...</div></div>
+    </section>
+  </div>
+
+  <th:block th:replace="~{partials/watchlist}"></th:block>
+</div>
+
+<script src="/js/utils.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/klinecharts@9.8.12/dist/umd/klinecharts.min.js"></script>
+<script src="/js/watchlist.js"></script>
+<script src="/js/chart_page.js"></script>
+</body>
+</html>

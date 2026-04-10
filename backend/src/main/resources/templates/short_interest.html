@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="zh" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>空头调试</title>
+<script>
+(() => {
+  try {
+    const theme = localStorage.getItem('global-theme') || 'dark';
+    document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+  } catch (_) {
+    document.documentElement.dataset.theme = 'dark';
+  }
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body th:attr="data-api-base=${apiBase},data-short-symbol=${symbol},data-short-name=${name}">
+<div class="app-shell has-shared-watchlist chart-shell">
+  <div class="app chart-page-app short-interest-page">
+    <div class="header chart-header">
+      <div class="brand-wrap">
+        <div class="brand">
+          <div class="brand-title">空头调试</div>
+        </div>
+        <div class="nav-pills">
+          <a class="page-link" th:href="@{/}">首页</a>
+          <a class="page-link" th:href="@{/screener}">筛选器</a>
+          <a class="page-link active" th:href="@{/short-interest(symbol=${#strings.isEmpty(symbol) ? '6758.T' : symbol},name=${name})}">空头调试</a>
+        </div>
+      </div>
+      <div class="chart-header-actions">
+        <button class="theme-toggle-btn" type="button" id="shortThemeToggleBtn" data-global-theme-toggle aria-label="Toggle theme">
+          <span class="theme-toggle-track">
+            <span class="theme-toggle-label theme-toggle-label-dark">N</span>
+            <span class="theme-toggle-thumb"></span>
+            <span class="theme-toggle-label theme-toggle-label-light">D</span>
+          </span>
+        </button>
+      </div>
+    </div>
+
+    <section class="chart-topbar">
+      <div class="chart-topbar-main">
+        <div class="chart-symbol" id="shortPageSymbol" th:text="${#strings.isEmpty(symbol) ? '6758.T' : symbol}">6758.T</div>
+        <div class="chart-name" id="shortPageName" th:text="${#strings.isEmpty(name) ? '空头调试页' : name}">空头调试页</div>
+      </div>
+      <div class="chart-topbar-side short-page-actions">
+        <input class="short-page-input" id="shortSymbolInput" th:value="${#strings.isEmpty(symbol) ? '6758.T' : symbol}" placeholder="例如 7711.T">
+        <button class="short-page-btn short-page-btn-primary" type="button" id="shortLoadBtn">加载</button>
+        <a class="short-page-link" id="shortChartLink" th:href="@{/chart(symbol=${#strings.isEmpty(symbol) ? '6758.T' : symbol},name=${name})}">图表页</a>
+      </div>
+    </section>
+
+    <section class="chart-ownership-card">
+      <div class="chart-news-head">
+        <div class="ai-card-title"><span class="ai-icon">OS</span><span>空头结构</span></div>
+        <div class="chart-news-actions">
+          <span class="ai-last-fetch" id="shortOwnershipFetch"></span>
+          <button class="btn-refresh" type="button" id="shortOwnershipRefreshBtn">刷新</button>
+        </div>
+      </div>
+      <div class="chart-ownership-grid" id="shortOwnershipBody"><div class="empty-note">正在加载空头调试...</div></div>
+    </section>
+
+    <section class="chart-insights-card short-debug-card">
+      <div class="chart-news-head">
+        <div class="ai-card-title"><span class="ai-icon">D</span><span>调试摘要</span></div>
+        <div class="chart-news-actions">
+          <span class="ai-last-fetch" id="shortDebugFetch"></span>
+          <button class="btn-refresh" type="button" id="shortDebugRefreshBtn">刷新</button>
+        </div>
+      </div>
+      <div class="short-debug-status" id="shortDebugStatus">正在加载...</div>
+      <div class="short-debug-grid">
+        <article class="chart-ownership-item">
+          <div class="chart-ownership-head">
+            <div class="chart-ownership-title">摘要</div>
+            <div class="chart-ownership-subtitle">抓取状态、缺失字段、零值判断</div>
+          </div>
+          <div class="chart-ownership-list" id="shortDebugSummary"></div>
+        </article>
+        <article class="chart-ownership-item">
+          <div class="chart-ownership-head">
+            <div class="chart-ownership-title">最新行</div>
+            <div class="chart-ownership-subtitle">概览表与明细表最新记录</div>
+          </div>
+          <div class="short-raw-table" id="shortLatestRows"></div>
+        </article>
+      </div>
+    </section>
+
+    <section class="chart-news-card short-history-card">
+      <div class="chart-news-head">
+        <div class="ai-card-title"><span class="ai-icon">R</span><span>最近记录</span></div>
+      </div>
+      <div class="short-history-wrap">
+        <div class="short-history-block">
+          <div class="chart-ownership-title">概览表最近记录</div>
+          <div class="short-raw-table" id="shortOverviewRecent"></div>
+        </div>
+        <div class="short-history-block">
+          <div class="chart-ownership-title">明细表最近记录</div>
+          <div class="short-raw-table" id="shortDetailRecent"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="chart-news-card short-json-card">
+      <div class="chart-news-head">
+        <div class="ai-card-title"><span class="ai-icon">J</span><span>Debug JSON</span></div>
+      </div>
+      <pre class="short-json-pre" id="shortDebugJson">正在加载...</pre>
+    </section>
+  </div>
+
+  <th:block th:replace="~{partials/watchlist}"></th:block>
+</div>
+
+<script src="/js/utils.js"></script>
+<script src="/js/watchlist.js"></script>
+<script src="/js/short_interest_page.js"></script>
+</body>
+</html>

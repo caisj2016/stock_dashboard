@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>空头压力接口测试</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+<style>
+body {
+  margin: 0;
+  background: #f1e7d8;
+  color: #2f2218;
+  font-family: "Noto Sans SC", sans-serif;
+}
+.ownership-test-shell {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 28px 24px 40px;
+}
+.ownership-test-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+.ownership-test-title {
+  font-size: 28px;
+  font-weight: 700;
+}
+.ownership-test-sub {
+  margin-top: 6px;
+  color: #6b4f39;
+  font-size: 14px;
+}
+.ownership-test-tools {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.ownership-test-input {
+  min-width: 220px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(124, 96, 69, 0.2);
+  background: #fbf6ee;
+  color: #2f2218;
+  font: 600 14px "JetBrains Mono", monospace;
+}
+.ownership-test-btn,
+.ownership-test-link {
+  padding: 12px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(124, 96, 69, 0.24);
+  background: #f8efdf;
+  color: #4a3322;
+  text-decoration: none;
+  font-weight: 700;
+  cursor: pointer;
+}
+.ownership-test-btn-primary {
+  background: #e3cfaf;
+}
+.ownership-test-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 18px;
+}
+.ownership-test-card {
+  background: #fbf6ee;
+  border: 1px solid rgba(124, 96, 69, 0.18);
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: 0 10px 28px rgba(115, 83, 53, 0.08);
+}
+.ownership-test-card h2 {
+  margin: 0 0 12px;
+  font-size: 18px;
+}
+.ownership-test-status {
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: #f7efe2;
+  border: 1px solid rgba(124, 96, 69, 0.14);
+  font-size: 15px;
+  line-height: 1.7;
+}
+.ownership-test-list {
+  display: grid;
+  gap: 10px;
+}
+.ownership-test-row {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 12px;
+  align-items: start;
+}
+.ownership-test-label {
+  color: #6b4f39;
+  font-weight: 700;
+}
+.ownership-test-value {
+  color: #2f2218;
+  font-family: "JetBrains Mono", monospace;
+  word-break: break-word;
+}
+.ownership-test-value.empty {
+  color: #9b7f67;
+}
+.ownership-test-pre {
+  margin: 0;
+  max-height: 420px;
+  overflow: auto;
+  padding: 14px;
+  border-radius: 14px;
+  background: #f4eadc;
+  border: 1px solid rgba(124, 96, 69, 0.14);
+  color: #3d2b1e;
+  font: 13px/1.6 "JetBrains Mono", monospace;
+}
+.ownership-test-note {
+  margin-top: 10px;
+  color: #7a5a3e;
+  font-size: 13px;
+}
+@media (max-width: 900px) {
+  .ownership-test-grid {
+    grid-template-columns: 1fr;
+  }
+  .ownership-test-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .ownership-test-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+</style>
+</head>
+<body data-api-base="{{ api_base or '' }}">
+<div class="ownership-test-shell">
+  <div class="ownership-test-head">
+    <div>
+      <div class="ownership-test-title">空头压力接口测试</div>
+      <div class="ownership-test-sub">用来确认是“数据源没有空头字段”，还是“接口链路里某一步没算出来”。</div>
+    </div>
+    <div class="ownership-test-tools">
+      <input class="ownership-test-input" id="symbolInput" value="{{ symbol }}" placeholder="例如 6758.T / AAPL">
+      <button class="ownership-test-btn ownership-test-btn-primary" type="button" id="runBtn">开始测试</button>
+      <a class="ownership-test-link" id="chartLink" href="/chart?symbol={{ symbol }}">打开图表页</a>
+    </div>
+  </div>
+
+  <div class="ownership-test-status" id="statusBox">准备就绪。</div>
+
+  <div class="ownership-test-grid">
+    <section class="ownership-test-card">
+      <h2>快速结论</h2>
+      <div class="ownership-test-list" id="summaryList"></div>
+      <div class="ownership-test-note">重点看：`diagnosis`、`missing_fields`、`hasShortCoverage`。</div>
+    </section>
+
+    <section class="ownership-test-card">
+      <h2>原始字段</h2>
+      <div class="ownership-test-list" id="rawList"></div>
+    </section>
+
+    <section class="ownership-test-card">
+      <h2>推导结果</h2>
+      <div class="ownership-test-list" id="derivedList"></div>
+    </section>
+
+    <section class="ownership-test-card">
+      <h2>数据来源状态</h2>
+      <div class="ownership-test-list" id="sourceList"></div>
+    </section>
+  </div>
+
+  <div class="ownership-test-grid">
+    <section class="ownership-test-card">
+      <h2>Debug JSON</h2>
+      <pre class="ownership-test-pre" id="debugJson">等待请求...</pre>
+    </section>
+    <section class="ownership-test-card">
+      <h2>最终接口返回</h2>
+      <pre class="ownership-test-pre" id="finalJson">等待请求...</pre>
+    </section>
+  </div>
+</div>
+
+<script>
+const els = {
+  symbolInput: document.getElementById('symbolInput'),
+  runBtn: document.getElementById('runBtn'),
+  chartLink: document.getElementById('chartLink'),
+  statusBox: document.getElementById('statusBox'),
+  summaryList: document.getElementById('summaryList'),
+  rawList: document.getElementById('rawList'),
+  derivedList: document.getElementById('derivedList'),
+  sourceList: document.getElementById('sourceList'),
+  debugJson: document.getElementById('debugJson'),
+  finalJson: document.getElementById('finalJson'),
+};
+
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderRows(container, entries) {
+  container.innerHTML = entries.map(([label, value]) => {
+    const text = value == null || value === '' ? '--' : Array.isArray(value) ? value.join(', ') : String(value);
+    const empty = text === '--' ? ' empty' : '';
+    return `
+      <div class="ownership-test-row">
+        <div class="ownership-test-label">${escapeHtml(label)}</div>
+        <div class="ownership-test-value${empty}">${escapeHtml(text)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function loadDebug(symbol) {
+  const clean = (symbol || '').trim().toUpperCase();
+  if (!clean) return;
+  els.statusBox.textContent = `正在测试 ${clean} ...`;
+  els.chartLink.href = `/chart?symbol=${encodeURIComponent(clean)}`;
+  history.replaceState({}, '', `/ownership-short-test?symbol=${encodeURIComponent(clean)}`);
+  try {
+    const res = await fetch(`/api/ownership_short_debug?symbol=${encodeURIComponent(clean)}`);
+    const payload = await res.json();
+    els.statusBox.textContent = `${clean}：${payload.diagnosis || '已完成测试'}`;
+    renderRows(els.summaryList, [
+      ['诊断', payload.diagnosis],
+      ['缺失字段', (payload.missing_fields || []).join(', ') || '无'],
+      ['图表历史可用', payload.chart?.ok],
+      ['空头覆盖可用', payload.derived?.hasShortCoverage],
+      ['正式接口 ok', payload.final_payload?.ok],
+    ]);
+    renderRows(els.rawList, Object.entries(payload.raw || {}));
+    renderRows(els.derivedList, Object.entries(payload.derived || {}));
+    renderRows(els.sourceList, [
+      ['chart.ok', payload.chart?.ok],
+      ['chart.error', payload.chart?.error || '--'],
+      ['chart.points', payload.chart?.points],
+      ['info_error', payload.source?.info_error || '--'],
+      ['major_holders_rows', payload.source?.major_holders_rows],
+      ['institutional_holders_rows', payload.source?.institutional_holders_rows],
+    ]);
+    els.debugJson.textContent = JSON.stringify(payload, null, 2);
+    els.finalJson.textContent = JSON.stringify(payload.final_payload || {}, null, 2);
+  } catch (error) {
+    els.statusBox.textContent = `请求失败：${error.message || error}`;
+    els.debugJson.textContent = String(error.message || error);
+    els.finalJson.textContent = '';
+  }
+}
+
+els.runBtn.addEventListener('click', () => loadDebug(els.symbolInput.value));
+els.symbolInput.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter') loadDebug(els.symbolInput.value);
+});
+loadDebug(els.symbolInput.value);
+</script>
+</body>
+</html>

@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:th="http://www.thymeleaf.org">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Signal Screener</title>
+<script>
+(() => {
+  try {
+    const theme = localStorage.getItem('global-theme') || 'dark';
+    document.documentElement.dataset.theme = theme === 'light' ? 'light' : 'dark';
+  } catch (_) {
+    document.documentElement.dataset.theme = 'dark';
+  }
+})();
+</script>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/app.css">
+</head>
+<body th:attr="data-api-base=${apiBase}">
+<div class="app-shell has-shared-watchlist screener-shell">
+  <div class="app">
+    <div class="header screener-header">
+      <div>
+        <div class="logo">Signal <span>Stock</span> Screener</div>
+        <th:block th:replace="~{partials/nav_links :: navLinks}"></th:block>
+      </div>
+      <div class="header-actions">
+        <button class="theme-toggle-btn" type="button" data-global-theme-toggle aria-label="Toggle theme">
+          <span class="theme-toggle-track">
+            <span class="theme-toggle-label theme-toggle-label-dark">N</span>
+            <span class="theme-toggle-thumb"></span>
+            <span class="theme-toggle-label theme-toggle-label-light">D</span>
+          </span>
+        </button>
+        <div class="status-pill">
+          <div class="dot closed"></div>
+          <span id="screenerStatusPill">Universe</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="screener-toolbar-card">
+      <div class="screener-toolbar-row">
+        <div class="screener-toolbar-label">Universe</div>
+        <div class="screener-mini-chip-row">
+          <button class="screen-chip screen-chip-mini active" type="button" data-universe="core45">Core 45</button>
+          <button class="screen-chip screen-chip-mini" type="button" data-universe="nikkei225">Nikkei 225</button>
+          <button class="screen-chip screen-chip-mini" type="button" data-universe="topixcore">TOPIX Core 30</button>
+        </div>
+      </div>
+
+      <div class="screener-toolbar-row">
+        <div class="screener-toolbar-label">Strategy</div>
+        <div class="screener-mini-chip-row">
+          <button class="screen-chip screen-chip-mini active" type="button" data-mode="oversold">Oversold</button>
+          <button class="screen-chip screen-chip-mini" type="button" data-mode="macd_cross">MACD Cross</button>
+          <button class="screen-chip screen-chip-mini" type="button" data-mode="volume_breakout">Volume Breakout</button>
+          <button class="screen-chip screen-chip-mini" type="button" data-mode="ma_breakout">MA Breakout</button>
+          <button class="screen-chip screen-chip-mini" type="button" data-mode="combo">Combined Signal</button>
+        </div>
+
+        <div class="screener-toolbar-actions">
+          <span class="ai-last-fetch" id="screenerLastFetch"></span>
+          <button class="ai-btn" id="screenerRefreshBtn" type="button">Refresh</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="ai-card screener-results-panel">
+      <div class="ai-card-header">
+        <div class="ai-card-title">
+          <span class="ai-icon">S</span>
+          <span>Screen Results</span>
+        </div>
+      </div>
+      <div class="ai-body" id="screenerResultsBody">
+        <div class="ai-loading"><div class="ai-spinner"></div>Loading screen results...</div>
+      </div>
+    </div>
+  </div>
+
+  <th:block th:replace="~{partials/watchlist}"></th:block>
+</div>
+
+<script src="/js/utils.js"></script>
+<script src="/js/watchlist.js"></script>
+<script src="/js/screener.js"></script>
+</body>
+</html>

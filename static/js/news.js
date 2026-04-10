@@ -22,7 +22,7 @@ async function loadStockNews() {
   btn.disabled = true;
   body.innerHTML = `<div class="ai-loading"><div class="ai-spinner"></div>正在抓取 ${sym} 的最新相关新闻...</div>`;
   try {
-    const items = NewsState.stockCache[sym] || await fetchJson(`/api/stock_news?symbol=${encodeURIComponent(sym)}`);
+    const items = NewsState.stockCache[sym] || await fetchApiJson(`/api/stock_news?symbol=${encodeURIComponent(sym)}`);
     NewsState.stockCache[sym] = items;
     if (!items.length) {
       body.innerHTML = `<div class="ai-placeholder">暂时没有找到相关新闻</div>`;
@@ -45,7 +45,7 @@ function renderNewsItem(it) {
     <div class="news-title">
       ${it.url ? `<a href="${it.url}" target="_blank" rel="noopener">${it.title}</a>` : it.title}
     </div>
-    ${it.title_en && it.title_en !== it.title ? `<div class="news-title-en">${it.title_en}</div>` : ''}
+    ${it.titleEn && it.titleEn !== it.title ? `<div class="news-title-en">${it.titleEn}</div>` : ''}
     ${it.summary ? `<div class="news-summary">${it.summary}</div>` : ''}
   </div>`;
 }
@@ -59,7 +59,7 @@ async function loadTrumpNews(force = false) {
   btn.disabled = true;
   body.innerHTML = `<div class="ai-loading"><div class="ai-spinner"></div>正在从 Truth Social / X / Reuters / AP / BBC / The Hill 抓取...</div>`;
   try {
-    const items = await fetchJson('/api/trump_news');
+    const items = await fetchApiJson('/api/trump_news');
     NewsState.trumpLoaded = true;
     if (!items.length) {
       body.innerHTML = `<div class="ai-placeholder">暂未找到特朗普相关动态，请稍后重试</div>`;

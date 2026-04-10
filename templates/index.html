@@ -17,7 +17,7 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
 </head>
-<body>
+<body data-api-base="{{ api_base or '' }}">
 <div class="app-shell has-shared-watchlist">
   <div class="app">
     {% include "partials/header.html" %}

@@ -1,0 +1,39 @@
+<div class="ai-panels">
+
+  <div class="ai-card" id="aiStockPanel">
+    <div class="ai-card-header">
+      <div class="ai-card-title">
+        <span class="ai-icon">股</span>
+        <span>个股最新资讯</span>
+        <span class="ai-badge">Yahoo Finance</span>
+      </div>
+      <div class="ai-card-actions">
+        <select id="aiStockSelect" class="ai-select">
+          <option value="">选择股票...</option>
+        </select>
+        <button class="ai-btn" id="stockNewsBtn" onclick="loadStockNews()">获取新闻</button>
+      </div>
+    </div>
+    <div class="ai-body" id="aiStockBody">
+      <div class="ai-placeholder">选择一只股票后再加载相关新闻。</div>
+    </div>
+  </div>
+
+  <div class="ai-card" id="aiTrumpPanel">
+    <div class="ai-card-header">
+      <div class="ai-card-title">
+        <span class="ai-icon">讯</span>
+        <span>特朗普最新发言</span>
+        <span class="ai-badge ai-badge-rss">RSS 自动</span>
+      </div>
+      <div class="ai-card-actions">
+        <span class="ai-last-fetch" id="trumpLastFetch"></span>
+        <button class="ai-btn" id="trumpBtn" onclick="loadTrumpNews(true)">刷新资讯</button>
+      </div>
+    </div>
+    <div class="ai-body" id="aiTrumpBody">
+      <div class="ai-placeholder">滚动到这里时再加载特朗普相关新闻。</div>
+    </div>
+  </div>
+
+</div>
