@@ -1,171 +1,205 @@
-# 日本股票观察仪表盘
+# Japan Stock Portfolio Dashboard
 
-一个基于 `Flask + yfinance + 原生前端` 的日股观察项目，支持：
+日本株のポートフォリオ監視、個別銘柄チャート、スクリーニング、ニュース、信用残・空売り系の指標をまとめて見るためのローカルダッシュボードです。
 
-- 持仓与观察股管理
-- 首页报价与新闻摘要
-- 技术选股页面
-- 个股 K 线图表页
-- 右侧统一自选列表
+現在のメイン実装は `backend/` の Spring Boot アプリです。画面テンプレートと静的ファイルも Spring Boot 側に配置されており、通常は `start.bat` または `run-dev.cmd` から起動します。
 
-## 运行环境
+## 主な機能
 
-- Python 3.10+
-- Windows / macOS / Linux
+- 保有銘柄・監視銘柄の一覧表示
+- 日本株の株価、前日比、指数、簡易ダッシュボード表示
+- 個別銘柄チャート、出来高、RSI、SMA、MACD
+- スクリーナーによる候補銘柄抽出
+- 個別銘柄ニュース、トピック digest、マクロ関連ニュース
+- 信用残・空売り関連データの表示
+- `portfolio.json` によるローカル保存と自動バックアップ
 
-安装依赖：
+## 必要環境
 
-```bash
-pip install flask flask-cors yfinance requests
+- Java 17
+- Maven 3.8+
+- Windows では `start.bat` / `run-dev.cmd` が利用できます
+
+外部データ取得には Yahoo Finance などの公開データソースを利用します。ネットワーク状況や提供元の仕様変更により、一部項目が空になることがあります。
+
+## 起動方法
+
+### 推奨: 自動起動
+
+```bat
+start.bat
 ```
 
-启动项目：
+`start.bat` は以下を行います。
 
-```bash
-python server.py
+- `18080` から `18090` の空きポートを探す
+- Maven があれば Spring Boot を dev モードで起動する
+- Maven がない場合はビルド済み jar を使って起動する
+- ブラウザで `http://localhost:<port>` を開く
+
+### 開発用ホットリロード
+
+```bat
+run-dev.cmd
 ```
 
-默认地址：
+固定ポート `18080` で Spring Boot を `dev` profile にして起動します。
 
-```text
-http://localhost:5555
+### jar から起動
+
+事前にビルドします。
+
+```powershell
+cd backend
+mvn -q -DskipTests package
 ```
 
-## 配置文件
+その後、リポジトリ直下で起動します。
 
-项目支持 `.env` 配置。
+```bat
+run.cmd
+```
 
-常用配置示例：
+## URL
+
+標準の画面 URL は次の通りです。
+
+- ダッシュボード: `http://localhost:18080/`
+- スクリーナー: `http://localhost:18080/screener`
+- 個別チャート: `http://localhost:18080/chart?symbol=6758.T`
+- 信用残・空売り: `http://localhost:18080/short-interest?symbol=6758.T`
+- API ドキュメント: `http://localhost:18080/swagger-ui/index.html`
+- ヘルスチェック: `http://localhost:18080/api/healthz`
+
+`start.bat` を使った場合は、実際のポートが `18080` 以外になることがあります。
+
+## 設定
+
+Spring Boot の主な設定は [backend/src/main/resources/application.yml](backend/src/main/resources/application.yml) にあります。
+
+よく使う環境変数:
 
 ```env
-HOST=0.0.0.0
-PORT=5555
-FLASK_DEBUG=1
-TEMPLATES_AUTO_RELOAD=1
-QUOTE_CACHE_TTL=60
-NEWS_CACHE_TTL=300
-TRUMP_CACHE_TTL=600
-HISTORY_FETCH_TIMEOUT=12
-SCREENER_FETCH_WORKERS=8
+BACKEND_PORT=18080
+APP_ALLOWED_ORIGINS=http://localhost:5555,http://localhost:3000
+APP_PORTFOLIO_FILE=../portfolio.json
+APP_PORTFOLIO_BACKUP_DIR=../data_backups
 PORTFOLIO_BACKUP_LIMIT=20
+HISTORY_FETCH_TIMEOUT=12
+APP_YAHOO_CHART_BASE_URL=https://query1.finance.yahoo.com/v8/finance/chart
 ```
 
-参考模板见：
+開発用 profile は [backend/src/main/resources/application-dev.yml](backend/src/main/resources/application-dev.yml) で、Thymeleaf と静的リソースのキャッシュを無効化しています。
 
-- [`.env.example`](./.env.example)
+`.env.example` は旧 Flask 実装由来の設定も含みます。現在の通常起動では Spring Boot の `application.yml` と環境変数が優先です。
 
-## 数据存储
+## データ保存
 
-当前项目不是数据库存储，核心数据保存在本地文件：
+ローカルデータは主に以下に保存されます。
 
-- `portfolio.json`
+- `portfolio.json`: 保有銘柄・監視銘柄データ
+- `data_backups/`: `portfolio.json` の自動バックアップ
+- `.yf_cache/`: 取得データのローカルキャッシュ
 
-这里保存的是你的股票列表与状态，例如：
+`portfolio.json` とバックアップは個人データを含む可能性があるため、Git 管理対象から外しています。
 
-- 股票代码
-- 股票名称
-- `已持有 / 观察中`
-- 持股数
-- 成本价
+## テストとビルド
 
-## 数据保护
+```powershell
+cd backend
+mvn test
+```
 
-项目现在已经加入了基础数据保护机制，主要针对 `portfolio.json`：
+コンパイルだけ確認する場合:
 
-1. 原子写入
-   保存时会先写入临时文件，再替换正式文件，避免写到一半损坏主文件。
+```powershell
+cd backend
+mvn -q -DskipTests compile
+```
 
-2. 自动备份
-   每次成功保存前，会把旧的 `portfolio.json` 备份到：
+jar を作成する場合:
 
-   - `data_backups/`
+```powershell
+cd backend
+mvn -q -DskipTests package
+```
 
-3. 备份数量控制
-   默认最多保留 `20` 份备份，可通过 `.env` 里的 `PORTFOLIO_BACKUP_LIMIT` 调整。
+## 主な API
 
-4. 备份回退
-   如果主文件损坏、JSON 解析失败，服务会尝试读取最近一份可用备份。
+レスポンスは基本的に `ApiResponse` 形式です。
 
-## Git 忽略
+```json
+{
+  "success": true,
+  "code": "OK",
+  "message": null,
+  "timestamp": "...",
+  "data": {}
+}
+```
 
-以下本地数据默认不会提交到 Git：
+代表的なエンドポイント:
 
-- `.env`
-- `portfolio.json`
-- `.yf_cache/`
-- `data_backups/`
-- `__pycache__/`
+- `GET /api/dashboard_snapshot`
+- `GET /api/quotes`
+- `GET /api/index_quotes`
+- `GET /api/chart-history`
+- `GET /api/chart_history`
+- `GET /api/screener`
+- `GET /api/portfolio`
+- `POST /api/portfolio`
+- `POST /api/add_stock`
+- `POST /api/remove_stock`
+- `GET /api/stock_news`
+- `GET /api/stock_insights`
+- `GET /api/ownership_short`
+- `GET /api/ownership_short_debug`
+- `GET /api/trump_news`
+- `GET /api/topic_digest`
+- `GET /api/migration/status`
 
-规则见：
+詳細は起動後の Swagger UI を参照してください。
 
-- [`.gitignore`](./.gitignore)
-
-## 项目结构
+## ディレクトリ構成
 
 ```text
 stock_dashboard/
-├─ server.py
+├─ backend/
+│  ├─ pom.xml
+│  └─ src/
+│     ├─ main/java/com/caisj/stockdashboard/backend/
+│     │  ├─ controller/
+│     │  ├─ service/
+│     │  ├─ client/
+│     │  ├─ repository/
+│     │  ├─ domain/
+│     │  └─ dto/
+│     └─ main/resources/
+│        ├─ templates/
+│        ├─ static/
+│        ├─ application.yml
+│        └─ application-dev.yml
+├─ docs/
+├─ python_fetchers/
 ├─ portfolio.json
-├─ templates/
-│  ├─ index.html
-│  ├─ screener.html
-│  ├─ chart.html
-│  └─ partials/
-├─ static/
-│  ├─ css/
-│  └─ js/
-├─ .env
-├─ .env.example
+├─ data_backups/
+├─ start.bat
+├─ run-dev.cmd
+├─ run.cmd
 └─ README.md
 ```
 
-## 页面说明
+リポジトリ直下の `templates/` と `static/` は旧構成の互換・参照用ファイルを含みます。現在の Spring Boot 実行時は `backend/src/main/resources/templates/` と `backend/src/main/resources/static/` が使用されます。
 
-### 首页
+## 開発メモ
 
-- 持仓卡片
-- 个股新闻
-- 日经 / 半导体摘要
-- 右侧统一自选列表
+- Java 側は Spring Boot 3.3.4、Thymeleaf、Caffeine cache、springdoc-openapi を使用しています。
+- `controller` はリクエスト受付、`service` / `service.impl` は業務ロジック、`client` は外部データ取得、`repository` はローカル保存を担当します。
+- フロントエンド JS は Spring Boot の静的リソースとして配信され、`/api/*` を呼び出します。
+- 旧 Python/Flask 系の資料や fetcher は一部残っていますが、通常の画面と API は Spring Boot 側が中心です。
 
-### 技术选股
+## 関連ドキュメント
 
-- 支持股票池切换
-- 支持多种技术策略筛选
-- 结果可跳转到图表页
-
-### 个股图表
-
-- K 线主图
-- 成交量 / MACD 开关
-- 右侧统一自选列表
-- 个股最新资讯
-
-## 开发说明
-
-如果开启：
-
-```env
-FLASK_DEBUG=1
-```
-
-通常修改以下内容后会自动重载：
-
-- `server.py`
-- `templates/*`
-- `static/js/*`
-- `static/css/*`
-
-## 已初始化 Git
-
-项目已经初始化 Git 并上传到：
-
-- `https://github.com/caisj2016/stock_dashboard.git`
-
----
-
-如果后续你想继续做，我建议下一步优先补：
-
-- 备份恢复入口
-- 自选列表详情卡优化
-- 图表页中文文案统一清理
+- [docs/user_guide.md](docs/user_guide.md)
+- [docs/spring_boot_refactor_plan.md](docs/spring_boot_refactor_plan.md)
+- [CONTRIBUTING.md](CONTRIBUTING.md)
