@@ -8,6 +8,10 @@ import java.util.Map;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 
+/**
+ * 提供预定义股票池数据的实现类。
+ * 负责维护多个选股池配置，并根据请求返回正确的股票池定义。
+ */
 @Service
 public class ScreenerUniverseServiceImpl implements ScreenerUniverseService {
 
@@ -76,6 +80,10 @@ public class ScreenerUniverseServiceImpl implements ScreenerUniverseService {
         "nikkei225", new ScreenerUniverseDefinition("nikkei225", "Nikkei 225", "当前阶段先复用已维护的核心池，后续再扩成全量样本", CORE_45)
     );
 
+    /**
+     * 返回给定标识符对应的股票池定义。
+     * 如果输入无效，则默认返回核心 45 池配置。
+     */
     @Override
     public ScreenerUniverseDefinition getUniverse(String universeKey) {
         String normalized = universeKey == null ? "core45" : universeKey.trim().toLowerCase();

@@ -15,6 +15,10 @@ import java.util.Map;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+/**
+ * 从组合仓库和雅虎行情客户端获取行情数据的服务实现。
+ * 对组合报价和指数报价结果进行转换，并通过缓存降低外部行情请求频率。
+ */
 @Service
 public class QuoteServiceImpl implements QuoteService {
 
@@ -26,6 +30,10 @@ public class QuoteServiceImpl implements QuoteService {
         this.yahooFinanceClient = yahooFinanceClient;
     }
 
+    /**
+     * 读取本地组合持仓，并为每只股票构建展示用的行情条目。
+     * 结果缓存到 quotes 以提高首页加载性能。
+     */
     @Override
     @Cacheable("quotes")
     public List<QuoteItemResponse> getPortfolioQuotes() {
@@ -34,6 +42,10 @@ public class QuoteServiceImpl implements QuoteService {
             .toList();
     }
 
+    /**
+     * 获取定义好的指数行情，并转换为前端可直接展示的指数报价格式。
+     * 结果缓存到 indexQuotes，避免频繁重复调用外部行情接口。
+     */
     @Override
     @Cacheable("indexQuotes")
     public Map<String, IndexQuoteResponse> getIndexQuotes() {

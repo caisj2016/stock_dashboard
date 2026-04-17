@@ -22,6 +22,10 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
+/**
+ * 选股服务的实现类。
+ * 负责从选股池、历史行情和技术指标中计算筛选结果，并组装成页面展示模型。
+ */
 @Service
 public class ScreenerServiceImpl implements ScreenerService {
 
@@ -44,6 +48,10 @@ public class ScreenerServiceImpl implements ScreenerService {
         this.portfolioRepository = portfolioRepository;
     }
 
+    /**
+     * 计算并返回指定筛选模式和选股池的结果。
+     * 该方法先获取股票池定义，再按模式筛选候选股票，并返回前端可展示的结果结构。
+     */
     @Override
     public ScreenerResponse getScreener(String mode, String universe, int limit) {
         ScreenerUniverseDefinition universeDefinition = screenerUniverseService.getUniverse(universe);

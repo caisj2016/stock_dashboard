@@ -19,6 +19,10 @@ import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
+/**
+ * 图表数据服务实现类。
+ * 负责获取历史行情、计算指标，并组装前端图表所需的 OHLC 和指标序列。
+ */
 @Service
 public class ChartServiceImpl implements ChartService {
 
@@ -41,6 +45,10 @@ public class ChartServiceImpl implements ChartService {
         this.chartIntervalService = chartIntervalService;
     }
 
+    /**
+     * 获取指定股票和区间的图表历史数据。
+     * 方法会根据区间配置拉取历史行情并计算均线、MACD、RSI 等指标。
+     */
     @Override
     public ChartHistoryResponse getChartHistory(String symbol, String interval) {
         String normalizedSymbol = symbol == null ? "" : symbol.trim().toUpperCase();

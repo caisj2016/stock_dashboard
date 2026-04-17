@@ -23,6 +23,10 @@ import org.jsoup.nodes.Element;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+/**
+ * 持仓调试服务实现类。
+ * 负责返回更详细的原始数据与抓取结果，便于检查日本和全球市场持仓数据源的解析状态。
+ */
 @Service
 public class OwnershipDebugServiceImpl implements OwnershipDebugService {
 
@@ -45,6 +49,10 @@ public class OwnershipDebugServiceImpl implements OwnershipDebugService {
         this.ownershipService = ownershipService;
     }
 
+    /**
+     * 获取指定股票的持仓调试信息。
+     * 根据股票类型调用不同数据源，并返回原始抓取和解析结果。
+     */
     @Override
     @Cacheable(cacheNames = "ownershipShortDebug", key = "#symbol")
     public OwnershipShortDebugResponse getOwnershipShortDebug(String symbol) {

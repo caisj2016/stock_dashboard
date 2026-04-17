@@ -5,6 +5,10 @@ import com.caisj.stockdashboard.backend.service.ChartIntervalService;
 import java.util.Map;
 import org.springframework.stereotype.Service;
 
+/**
+ * 图表区间配置服务实现类。
+ * 负责提供不同图表周期对应的历史行情拉取参数。
+ */
 @Service
 public class ChartIntervalServiceImpl implements ChartIntervalService {
 
@@ -17,6 +21,10 @@ public class ChartIntervalServiceImpl implements ChartIntervalService {
         "240", new ChartIntervalConfig("240", "60d", "60m", "4小时", 80, 4)
     );
 
+    /**
+     * 返回指定区间的图表配置。
+     * 如果输入无效，则默认返回日线配置。
+     */
     @Override
     public ChartIntervalConfig getConfig(String interval) {
         String normalized = interval == null ? "D" : interval.trim().toUpperCase();

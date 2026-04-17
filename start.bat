@@ -38,31 +38,36 @@ set "APP_URL=http://localhost:%APP_PORT%"
 echo  ------------------------------------------------
 echo   Server starting...
 echo   URL: %APP_URL%
+echo   Mode: dev hot reload when Maven is available
 echo  ------------------------------------------------
 echo.
 
 start "" "%APP_URL%" >nul 2>&1
 
+where mvn >nul 2>&1
+if not errorlevel 1 (
+    echo  Starting Spring Boot in dev hot-reload mode on port %APP_PORT%...
+    echo.
+    set "APP_PORTFOLIO_FILE=%PORTFOLIO_FILE%"
+    set "APP_PORTFOLIO_BACKUP_DIR=%BACKUP_DIR%"
+    set "SPRING_PROFILES_ACTIVE=dev"
+    cd /d "%BACKEND_DIR%"
+    call mvn spring-boot:run -Dspring-boot.run.arguments=--server.port=%APP_PORT%
+    goto :done
+)
+
 if exist "%JAR_PATH%" (
-    echo  Starting packaged backend jar on port %APP_PORT%...
+    echo  Maven not found. Falling back to packaged backend jar on port %APP_PORT%...
     echo.
     java -jar "%JAR_PATH%" --server.port=%APP_PORT% --app.portfolio.file="%PORTFOLIO_FILE%" --app.portfolio.backup-dir="%BACKUP_DIR%"
     goto :done
 )
 
-where mvn >nul 2>&1
-if errorlevel 1 (
-    echo  [ERROR] Maven not found and packaged jar is missing!
-    echo  Please install Maven or build the backend jar first.
-    echo.
-    pause
-    exit /b 1
-)
-
-echo  Packaged jar not found. Falling back to Maven run on port %APP_PORT%...
+echo  [ERROR] Maven not found and packaged jar is missing!
+echo  Please install Maven or build the backend jar first.
 echo.
-cd /d "%BACKEND_DIR%"
-call mvn spring-boot:run -Dspring-boot.run.arguments=--server.port=%APP_PORT%
+pause
+exit /b 1
 
 :done
 echo.

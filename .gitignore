@@ -10,3 +10,4 @@ docs/__pycache__/
 用户指南_带截图版.pdf
 backups/
 backend/target/
+backend/startup*.log

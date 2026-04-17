@@ -8,9 +8,16 @@ import java.util.Collections;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
+/**
+ * 技术指标计算服务实现类。
+ * 提供 RSI、SMA 和 MACD 等指标计算逻辑，供图表与选股服务调用。
+ */
 @Service
 public class IndicatorServiceImpl implements IndicatorService {
 
+    /**
+     * 计算收盘价序列的 RSI 值。
+     */
     @Override
     public Double calculateRsi(List<Double> closes, int period) {
         if (closes == null || closes.size() < period + 1) {
@@ -38,6 +45,9 @@ public class IndicatorServiceImpl implements IndicatorService {
         return 100 - (100 / (1 + rs));
     }
 
+    /**
+     * 计算给定值序列的简单移动平均。
+     */
     @Override
     public Double simpleMovingAverage(List<Double> values, int period) {
         if (values == null || values.size() < period) {
@@ -51,6 +61,9 @@ public class IndicatorServiceImpl implements IndicatorService {
         return total / period;
     }
 
+    /**
+     * 计算值序列的简单移动平均时间序列。
+     */
     @Override
     public List<Double> simpleMovingAverageSeries(List<Double> values, int period) {
         if (values == null || values.isEmpty()) {
@@ -73,6 +86,9 @@ public class IndicatorServiceImpl implements IndicatorService {
         return result;
     }
 
+    /**
+     * 计算收盘价序列的 MACD 快照数据。
+     */
     @Override
     public MacdSnapshot calculateMacd(List<Double> closes) {
         if (closes == null || closes.size() < 35) {
@@ -118,6 +134,9 @@ public class IndicatorServiceImpl implements IndicatorService {
         );
     }
 
+    /**
+     * 计算收盘价序列的完整 MACD 时间序列。
+     */
     @Override
     public MacdSeries calculateMacdFullSeries(List<Double> closes) {
         int size = closes == null ? 0 : closes.size();

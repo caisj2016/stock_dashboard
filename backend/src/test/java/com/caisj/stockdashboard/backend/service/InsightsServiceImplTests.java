@@ -30,11 +30,11 @@ class InsightsServiceImplTests {
         StockInsightsResponse response = insightsService.getStockInsights("7203.T");
 
         assertThat(response.ok()).isTrue();
-        assertThat(response.profile().sector()).isEqualTo("Consumer Cyclical");
-        assertThat(response.profile().track()).isEqualTo("Auto Manufacturers");
+        assertThat(response.profile().sector()).isEqualTo("可选消费");
+        assertThat(response.profile().track()).isEqualTo("汽车制造");
         assertThat(response.profile().business()).contains("Toyota Motor Corp");
         assertThat(response.profile().products()).contains("Core focus");
-        assertThat(response.profile().products()).contains("Auto Manufacturers");
+        assertThat(response.profile().products()).contains("汽车制造");
     }
 
     @Test

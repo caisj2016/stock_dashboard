@@ -8,6 +8,7 @@ import com.caisj.stockdashboard.backend.dto.response.MetricItemResponse;
 import com.caisj.stockdashboard.backend.dto.response.StockInsightsResponse;
 import com.caisj.stockdashboard.backend.service.ChartService;
 import com.caisj.stockdashboard.backend.service.InsightsService;
+import com.caisj.stockdashboard.backend.util.LocalizationUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import java.math.BigDecimal;
@@ -20,6 +21,10 @@ import java.util.List;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+/**
+ * 股票洞察服务实现类。
+ * 负责组合历史行情、基本面和评级数据，构建个股洞察卡片内容。
+ */
 @Service
 public class InsightsServiceImpl implements InsightsService {
 
@@ -34,6 +39,10 @@ public class InsightsServiceImpl implements InsightsService {
         this.yahooFinanceClient = yahooFinanceClient;
     }
 
+    /**
+     * 获取指定股票的洞察信息。
+     * 该方法会组合图表数据与 Yahoo Finance 基本面信息，返回完整的洞察展示对象。
+     */
     @Override
     @Cacheable(cacheNames = "stockInsights", key = "#symbol")
     public StockInsightsResponse getStockInsights(String symbol) {
@@ -136,7 +145,12 @@ public class InsightsServiceImpl implements InsightsService {
         String track = firstText(profile, "industryDisp", "industry");
         String business = buildBusinessText(price, profile, sector, track);
         String products = buildProductsText(price, profile, track, sector);
-        return new CompanyProfileResponse(displayText(sector), displayText(track), business, products);
+        return new CompanyProfileResponse(
+            LocalizationUtils.localizeDisplayText(sector),
+            LocalizationUtils.localizeDisplayText(track),
+            business,
+            products
+        );
     }
 
     private String now() {
@@ -305,10 +319,11 @@ public class InsightsServiceImpl implements InsightsService {
     private List<String> compactValues(String... values) {
         List<String> items = new ArrayList<>();
         for (String value : values) {
-            if (value == null || value.isBlank() || "--".equals(value) || items.contains(value)) {
+            String localized = LocalizationUtils.localizeFinancialText(value);
+            if (localized == null || localized.isBlank() || "--".equals(localized) || items.contains(localized)) {
                 continue;
             }
-            items.add(value);
+            items.add(localized);
         }
         return items;
     }

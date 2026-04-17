@@ -5,6 +5,7 @@ import com.caisj.stockdashboard.backend.dto.response.TopicDigestItemResponse;
 import com.caisj.stockdashboard.backend.dto.response.TopicDigestResponse;
 import com.caisj.stockdashboard.backend.dto.response.TrumpNewsItemResponse;
 import com.caisj.stockdashboard.backend.service.MacroNewsService;
+import com.caisj.stockdashboard.backend.util.LocalizationUtils;
 import java.net.URI;
 import java.time.LocalTime;
 import java.time.OffsetDateTime;
@@ -120,7 +121,7 @@ public class MacroNewsServiceImpl implements MacroNewsService {
                     item.provider(),
                     item.pub(),
                     item.title(),
-                    localizeHeadline(item.title()),
+                    LocalizationUtils.localizeHeadline(item.title()),
                     summarizeToChinese(item.title(), item.description(), normalizedTopic),
                     item.url()
                 ))
@@ -186,12 +187,12 @@ public class MacroNewsServiceImpl implements MacroNewsService {
 
     private TrumpNewsItemResponse toTrumpItem(String feed, RssFeedClient.RssEntry entry) {
         String source = detectSource(feed);
-        String titleZh = localizeHeadline(entry.title());
+        String titleZh = LocalizationUtils.localizeHeadline(entry.title());
         String summaryZh = summarizeTrumpItem(entry.title(), entry.description());
         return new TrumpNewsItemResponse(
             source,
             formatPub(entry.pubDate()),
-            cleanText(entry.title()),
+            LocalizationUtils.cleanText(entry.title()),
             titleZh,
             summaryZh,
             summaryZh.isBlank() ? titleZh : summaryZh,
@@ -204,8 +205,8 @@ public class MacroNewsServiceImpl implements MacroNewsService {
         OffsetDateTime publishedAt = rssFeedClient.parsePubDate(entry.pubDate());
         return new FeedItem(
             detectSource(feed),
-            cleanText(entry.title()),
-            cleanText(entry.description()),
+            LocalizationUtils.cleanText(entry.title()),
+            LocalizationUtils.cleanText(entry.description()),
             entry.url(),
             publishedAt,
             formatPub(entry.pubDate())
@@ -235,14 +236,15 @@ public class MacroNewsServiceImpl implements MacroNewsService {
     }
 
     private List<String> detectMarketTags(RssFeedClient.RssEntry entry) {
-        String haystack = (cleanText(entry.title()) + " " + cleanText(entry.description())).toLowerCase(Locale.ROOT);
+        String haystack = (LocalizationUtils.cleanText(entry.title()) + " " +
+            LocalizationUtils.cleanText(entry.description())).toLowerCase(Locale.ROOT);
         List<String> tags = new ArrayList<>();
         if (haystack.contains("tariff")) tags.add("关税");
         if (haystack.contains("trade")) tags.add("贸易");
         if (haystack.contains("china")) tags.add("中国");
         if (haystack.contains("fed")) tags.add("美联储");
         if (haystack.contains("election")) tags.add("选举");
-        if (haystack.contains("tax")) tags.add("税收");
+        if (haystack.contains("tax")) tags.add("税务");
         if (haystack.contains("tech")) tags.add("科技");
         return tags;
     }
@@ -251,16 +253,16 @@ public class MacroNewsServiceImpl implements MacroNewsService {
         Set<String> drivers = new LinkedHashSet<>();
         for (FeedItem item : items) {
             String haystack = (item.title() + " " + item.description()).toLowerCase(Locale.ROOT);
-            if (haystack.contains("tariff")) drivers.add("关税压力");
+            if (haystack.contains("tariff")) drivers.add("关税扰动");
             if (haystack.contains("yen")) drivers.add("日元波动");
-            if (containsAny(haystack, "japan", "bank of japan", "boj")) drivers.add("日本宏观");
-            if (haystack.contains("toyota")) drivers.add("汽车需求");
-            if (containsAny(haystack, "chip", "semiconductor", "hbm")) drivers.add("芯片周期");
-            if (haystack.contains("ai")) drivers.add("AI 资本开支");
+            if (containsAny(haystack, "japan", "bank of japan", "boj")) drivers.add("日本市场");
+            if (haystack.contains("toyota")) drivers.add("汽车权重");
+            if (containsAny(haystack, "chip", "semiconductor", "hbm")) drivers.add("半导体链");
+            if (haystack.contains("ai")) drivers.add("AI 需求预期");
             if (drivers.size() >= 3) break;
         }
         if (drivers.isEmpty()) {
-            drivers.add("semiconductor".equals(topic) ? "科技主线" : "宏观主线");
+            drivers.add("semiconductor".equals(topic) ? "科技板块" : "日本市场");
         }
         return new ArrayList<>(drivers);
     }
@@ -280,137 +282,79 @@ public class MacroNewsServiceImpl implements MacroNewsService {
 
     private String buildSummary(String topic, String tone, List<String> drivers, int count) {
         String label = "semiconductor".equals(topic) ? "半导体与科技板块" : "日本市场";
-        String reason = drivers.isEmpty() ? "宏观消息" : String.join("、", drivers);
-        return label + "当前基调为" + tone + "，已汇总 " + count + " 条相关新闻，主线聚焦 " + reason + "。";
-    }
-
-    private String localizeHeadline(String title) {
-        String clean = cleanText(title);
-        if (clean.isBlank()) {
-            return "";
-        }
-        String lower = clean.toLowerCase(Locale.ROOT);
-
-        if (lower.contains("fast retailing") && lower.contains("record high")) {
-            return "迅销在上调利润预期后股价飙升至历史新高";
-        }
-        if (lower.contains("trump administration") && lower.contains("big tech") && lower.contains("fines")) {
-            return "欧盟大型科技罚款两年超 70 亿美元，特朗普政府不满升级";
-        }
-        if (lower.contains("alibaba") && lower.contains("investment") && lower.contains("ai model")) {
-            return "阿里巴巴领投 2.9 亿美元，用于建设新型 AI 模型";
-        }
-        if (lower.contains("openai") && lower.contains("anthropic") && lower.contains("shareholders")) {
-            return "OpenAI 在致股东备忘录中点名 Anthropic，强调 AI 竞争升温";
-        }
-
-        String localized = clean;
-        localized = replaceIgnoreCase(localized, "Fast Retailing", "迅销");
-        localized = replaceIgnoreCase(localized, "Uniqlo", "优衣库");
-        localized = replaceIgnoreCase(localized, "Trump administration", "特朗普政府");
-        localized = replaceIgnoreCase(localized, "European Commission", "欧盟委员会");
-        localized = replaceIgnoreCase(localized, "European Union", "欧盟");
-        localized = replaceIgnoreCase(localized, "Big Tech", "大型科技公司");
-        localized = replaceIgnoreCase(localized, "Alibaba", "阿里巴巴");
-        localized = replaceIgnoreCase(localized, "OpenAI", "OpenAI");
-        localized = replaceIgnoreCase(localized, "Anthropic", "Anthropic");
-        localized = replaceIgnoreCase(localized, "shares soar", "股价大涨");
-        localized = replaceIgnoreCase(localized, "record high", "历史新高");
-        localized = replaceIgnoreCase(localized, "lifts profit forecast", "上调利润预期");
-        localized = replaceIgnoreCase(localized, "investment", "投资");
-        localized = replaceIgnoreCase(localized, "memo to shareholders", "致股东备忘录");
-        localized = replaceIgnoreCase(localized, "gains momentum", "势头增强");
-        localized = replaceIgnoreCase(localized, "fines", "罚款");
-        localized = replaceIgnoreCase(localized, "new kind of AI model", "新型 AI 模型");
-        return localized;
+        String reason = drivers.isEmpty() ? "市场消息" : String.join("、", drivers);
+        return label + "当前整体偏" + tone + "，本次整理了 " + count + " 条相关新闻，核心关注点包括 " + reason + "。";
     }
 
     private String summarizeTrumpItem(String title, String description) {
-        String combined = (cleanText(title) + " " + cleanText(description)).toLowerCase(Locale.ROOT);
+        String combined = (LocalizationUtils.cleanText(title) + " " +
+            LocalizationUtils.cleanText(description)).toLowerCase(Locale.ROOT);
         if (combined.contains("tariff")) {
-            return "关税相关表态再次升温，市场更关注贸易政策与跨境资产定价影响。";
+            return "关税相关表态再起，市场会重新评估贸易摩擦对通胀、企业利润和风险偏好的影响。";
         }
         if (combined.contains("big tech") && combined.contains("fine")) {
-            return "欧盟对大型科技公司的罚款升级，特朗普政府与欧盟监管摩擦继续升温。";
+            return "欧美对大型科技公司的监管和罚款继续升级，科技板块估值承压。";
         }
         if (combined.contains("white house")) {
-            return "消息聚焦白宫最新政策口径，短线可能影响风险偏好与全球宏观预期。";
+            return "白宫最新政策与表态继续影响全球风险偏好，短线情绪波动可能加大。";
         }
         if (combined.contains("trade")) {
-            return "内容围绕贸易政策与对外关系，市场通常会同步关注关税、汇率与出口链影响。";
+            return "贸易议题升温会影响全球供应链和资本市场风险偏好，需关注后续政策细节。";
         }
         return summarizeToChinese(title, description, "trump");
     }
 
     private String summarizeToChinese(String title, String description, String topic) {
-        String combined = (cleanText(title) + " " + cleanText(description)).toLowerCase(Locale.ROOT);
+        String combined = (LocalizationUtils.cleanText(title) + " " +
+            LocalizationUtils.cleanText(description)).toLowerCase(Locale.ROOT);
         if ("nikkei".equals(topic)) {
             if (combined.contains("fast retailing") && combined.contains("profit forecast")) {
-                return "迅销上调利润预期后股价大涨，日本消费与龙头权重板块情绪受提振。";
+                return "迅销上调盈利预期后股价走强，日本消费与龙头权重板块情绪受提振。";
             }
             if (combined.contains("yen")) {
-                return "消息主线与日元走势相关，可能继续影响出口股和日经指数权重股表现。";
+                return "日元相关波动仍是日股的重要变量，出口和权重板块情绪容易受到影响。";
             }
             if (containsAny(combined, "japan", "bank of japan", "boj")) {
-                return "新闻聚焦日本宏观与政策环境，市场会继续观察日股风险偏好变化。";
+                return "新闻焦点集中在日本市场与政策预期，短线会继续影响权重股和指数表现。";
             }
         }
         if ("semiconductor".equals(topic)) {
             if (combined.contains("ai model") || combined.contains("ai")) {
-                return "新闻围绕 AI 投资与算力扩张，利多半导体链资本开支与需求预期。";
+                return "AI 相关进展继续强化算力与半导体需求预期，科技板块情绪偏积极。";
             }
             if (containsAny(combined, "chip", "semiconductor", "tsmc", "hbm", "gpu")) {
-                return "内容与芯片周期或先进制程相关，市场关注科技链景气度延续情况。";
+                return "芯片与半导体链条仍是科技主线，供需与资本开支预期持续受到关注。";
             }
         }
         if (combined.contains("openai") && combined.contains("anthropic")) {
-            return "OpenAI 与 Anthropic 的竞争被重新强调，AI 模型商业化与融资节奏仍是焦点。";
+            return "OpenAI 与 Anthropic 的融资和竞争动态，反映 AI 产业景气度仍在提升。";
         }
         if (combined.contains("alibaba") && combined.contains("investment")) {
-            return "阿里巴巴参与 AI 模型融资，反映行业仍在加码通用模型与应用落地。";
+            return "阿里继续加码 AI 投资，说明大厂仍在积极推进模型与应用落地。";
         }
         if (combined.contains("record high")) {
-            return "相关新闻偏利多，核心公司创出新高，板块情绪明显改善。";
+            return "相关资产创出新高，说明资金风险偏好改善，板块情绪偏强。";
         }
         return fallbackChineseSummary(title, description);
     }
 
     private String fallbackChineseSummary(String title, String description) {
-        String cleanTitle = localizeHeadline(title);
-        String cleanDesc = cleanText(description);
+        String cleanTitle = LocalizationUtils.localizeHeadline(title);
+        String cleanDesc = LocalizationUtils.cleanText(description);
         if (cleanDesc.isBlank()) {
             return cleanTitle;
         }
-        String localizedDesc = replaceIgnoreCase(cleanDesc, "Japan", "日本");
-        localizedDesc = replaceIgnoreCase(localizedDesc, "Japanese", "日本");
-        localizedDesc = replaceIgnoreCase(localizedDesc, "semiconductor", "半导体");
-        localizedDesc = replaceIgnoreCase(localizedDesc, "chip", "芯片");
-        localizedDesc = replaceIgnoreCase(localizedDesc, "AI", "AI");
-        localizedDesc = replaceIgnoreCase(localizedDesc, "tariff", "关税");
-        localizedDesc = replaceIgnoreCase(localizedDesc, "trade", "贸易");
-        localizedDesc = replaceIgnoreCase(localizedDesc, "shares", "股价");
-        localizedDesc = replaceIgnoreCase(localizedDesc, "profit forecast", "利润预期");
+        String localizedDesc = LocalizationUtils.localizeFinancialText(cleanDesc);
         localizedDesc = shorten(localizedDesc, 60);
         return localizedDesc.isBlank() ? cleanTitle : localizedDesc;
     }
 
-    private String replaceIgnoreCase(String text, String search, String replacement) {
-        return text.replaceAll("(?i)" + java.util.regex.Pattern.quote(search), replacement);
-    }
-
     private String shorten(String value, int max) {
-        String text = cleanText(value);
+        String text = LocalizationUtils.cleanText(value);
         if (text.length() <= max) {
             return text;
         }
-        return text.substring(0, Math.max(0, max - 1)) + "…";
-    }
-
-    private String cleanText(String value) {
-        if (value == null || value.isBlank()) {
-            return "";
-        }
-        return Jsoup.parse(value).text().replaceAll("\\s+", " ").trim();
+        return text.substring(0, Math.max(0, max - 1)) + "...";
     }
 
     private record FeedItem(

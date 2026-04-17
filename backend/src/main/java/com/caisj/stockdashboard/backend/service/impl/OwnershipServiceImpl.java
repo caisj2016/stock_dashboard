@@ -18,6 +18,10 @@ import java.util.List;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+/**
+ * 持仓结构与空头压力服务的实现类。
+ * 负责获取个股图表数据、机构持股和空头数据，并转换成页面摘要模型。
+ */
 @Service
 public class OwnershipServiceImpl implements OwnershipService {
 
@@ -32,6 +36,10 @@ public class OwnershipServiceImpl implements OwnershipService {
         this.yahooFinanceClient = yahooFinanceClient;
     }
 
+    /**
+     * 获取指定股票的机构与空头持仓摘要。
+     * 方法会调用图表服务和 Yahoo Finance 数据，构建持仓结构和短期空头分析结果。
+     */
     @Override
     @Cacheable(cacheNames = "ownershipShort", key = "#symbol")
     public OwnershipShortResponse getOwnershipShort(String symbol) {

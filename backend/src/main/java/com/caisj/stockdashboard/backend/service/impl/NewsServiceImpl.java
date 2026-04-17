@@ -13,6 +13,10 @@ import org.springframework.cache.annotation.Cacheable;
 import org.jsoup.Jsoup;
 import org.springframework.stereotype.Service;
 
+/**
+ * 股票新闻服务实现类。
+ * 负责从外部 RSS 获取股票新闻并进行本地化处理，返回前端可展示的新闻条目。
+ */
 @Service
 public class NewsServiceImpl implements NewsService {
 
@@ -25,6 +29,10 @@ public class NewsServiceImpl implements NewsService {
         this.yahooFinanceClient = yahooFinanceClient;
     }
 
+    /**
+     * 获取指定股票的新闻列表。
+     * 该方法会抓取 RSS 订阅内容并尝试转换成中文标题与摘要。
+     */
     @Override
     @Cacheable(cacheNames = "stockNews", key = "#symbol")
     public List<NewsItemResponse> getStockNews(String symbol) {

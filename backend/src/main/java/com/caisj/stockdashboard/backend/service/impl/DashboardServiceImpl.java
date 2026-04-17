@@ -8,6 +8,10 @@ import java.time.format.DateTimeFormatter;
 import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
+/**
+ * DashboardService 的实现类。
+ * 通过行情服务获取组合与指数数据，并缓存仪表盘快照结果。
+ */
 @Service
 public class DashboardServiceImpl implements DashboardService {
 
@@ -19,6 +23,9 @@ public class DashboardServiceImpl implements DashboardService {
         this.quoteService = quoteService;
     }
 
+    /**
+     * 调用 QuoteService 获取组合和指数行情，并附加当前时间，返回首页展示所需快照数据。
+     */
     @Override
     @Cacheable("dashboardSnapshot")
     public DashboardSnapshotResponse getSnapshot() {

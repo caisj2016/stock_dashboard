@@ -12,6 +12,10 @@ import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
+/**
+ * PortfolioService 的默认实现。
+ * 负责持仓数据验证、标准化并与本地仓库交互进行读取与保存。
+ */
 @Service
 public class PortfolioServiceImpl implements PortfolioService {
 
@@ -23,6 +27,9 @@ public class PortfolioServiceImpl implements PortfolioService {
         this.portfolioRepository = portfolioRepository;
     }
 
+    /**
+     * 从仓库读取组合持仓，并转换成前端可展示的组合响应结构。
+     */
     @Override
     public PortfolioResponse getPortfolio() {
         return new PortfolioResponse(
@@ -32,6 +39,10 @@ public class PortfolioServiceImpl implements PortfolioService {
         );
     }
 
+    /**
+     * 将用户提交的持仓列表标准化后保存为当前组合数据。
+     * 如果传入列表为空，则保持原有持仓不变。
+     */
     @Override
     public PortfolioResponse updatePortfolio(List<PortfolioResponse.PortfolioItem> items) {
         List<PortfolioItemRecord> normalized = normalizeItems(items);
@@ -39,6 +50,10 @@ public class PortfolioServiceImpl implements PortfolioService {
         return new PortfolioResponse(normalized.stream().map(this::toItem).toList());
     }
 
+    /**
+     * 向组合中新增一只股票，默认状态为 watch。
+     * 仅当该代码尚未存在于组合中时才会保存。
+     */
     @Override
     public void addStock(AddStockRequest request) {
         String code = normalizeCode(request.code());
@@ -57,6 +72,9 @@ public class PortfolioServiceImpl implements PortfolioService {
         portfolioRepository.saveAll(updated);
     }
 
+    /**
+     * 删除组合中的指定股票，用于用户移除持仓或关注记录。
+     */
     @Override
     public void removeStock(RemoveStockRequest request) {
         String code = normalizeCode(request.code());
